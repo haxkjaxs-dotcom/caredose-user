@@ -7,6 +7,7 @@ import 'screens/bmi_screen.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/settings_sheet.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 import 'widgets/common.dart';
@@ -72,7 +73,7 @@ class _ShellState extends State<_Shell> {
   }
 
   void _openSettings() {
-    showAppSheet<void>(context, title: 'ตั้งค่า', builder: (_) => const Text('เร็ว ๆ นี้'));
+    showAppSheet<void>(context, title: 'ตั้งค่า', builder: (ctx) => SettingsSheet(onClose: () => Navigator.pop(ctx)));
   }
 
   @override

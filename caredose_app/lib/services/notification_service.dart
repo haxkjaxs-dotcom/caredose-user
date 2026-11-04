@@ -40,7 +40,7 @@ Future<void> notificationBackgroundHandler(NotificationResponse r) async {
   await FlutterLocalNotificationsPlugin().cancel(id: notificationId(key, repeat: true));
 }
 
-class NotificationService implements NotificationScheduler {
+class NotificationService implements NotificationScheduler, NotificationPermissions {
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
 
@@ -82,6 +82,7 @@ class NotificationService implements NotificationScheduler {
   IOSFlutterLocalNotificationsPlugin? get _ios =>
       _plugin.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
 
+  @override
   Future<bool> requestPermissions() async {
     final a = _android;
     if (a != null) {
@@ -92,6 +93,7 @@ class NotificationService implements NotificationScheduler {
     return await _ios?.requestPermissions(alert: true, badge: true, sound: true) ?? false;
   }
 
+  @override
   Future<bool> permissionsGranted() async {
     final a = _android;
     if (a != null) return await a.areNotificationsEnabled() ?? false;

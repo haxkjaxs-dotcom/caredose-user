@@ -12,6 +12,12 @@ abstract class NotificationScheduler {
   Future<void> reschedule(AppData d, Set<String> dismissed, DateTime now);
 }
 
+/// System notification permission, so the settings screen can be tested without the plugin.
+abstract class NotificationPermissions {
+  Future<bool> permissionsGranted();
+  Future<bool> requestPermissions();
+}
+
 class AppState extends ChangeNotifier {
   AppState(this._storage, this._scheduler, {DateTime Function()? clock})
       : _clock = clock ?? DateTime.now {

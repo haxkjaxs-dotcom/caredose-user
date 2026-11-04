@@ -11,13 +11,6 @@ Future<void> openContacts(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> tapVisible(WidgetTester tester, Finder f) async {
-  await tester.ensureVisible(f);
-  await tester.pumpAndSettle();
-  await tester.tap(f);
-  await tester.pumpAndSettle();
-}
-
 void main() {
   testWidgets('shows patient summary, seeded relative and appointment', (tester) async {
     await pumpApp(tester);

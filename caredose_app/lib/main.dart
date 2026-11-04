@@ -16,8 +16,11 @@ Future<void> main() async {
   state = AppState(Storage(await SharedPreferences.getInstance()), service);
   await service.requestPermissions();
   await service.reschedule(state.data, state.dismissed, state.now);
-  runApp(ChangeNotifierProvider.value(
-    value: state,
+  runApp(MultiProvider(
+    providers: [
+      ChangeNotifierProvider.value(value: state),
+      Provider<NotificationPermissions>.value(value: service),
+    ],
     child: const LifecycleReloader(child: CareDoseApp()),
   ));
 }
