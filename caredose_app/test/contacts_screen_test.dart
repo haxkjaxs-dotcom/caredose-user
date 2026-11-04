@@ -1,0 +1,81 @@
+import 'dart:convert';
+
+import 'package:caredose/models/models.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers.dart';
+
+Future<void> openContacts(WidgetTester tester) async {
+  await tester.tap(find.text('ญาติ/นัด').last);
+  await tester.pumpAndSettle();
+}
+
+Future<void> tapVisible(WidgetTester tester, Finder f) async {
+  await tester.ensureVisible(f);
+  await tester.pumpAndSettle();
+  await tester.tap(f);
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('shows patient summary, seeded relative and appointment', (tester) async {
+    await pumpApp(tester);
+    await openContacts(tester);
+    expect(find.text('คุณแม่สมศรี'), findsOneWidget);
+    expect(find.text('วันนี้ ทานแล้ว 0 จาก 5 รายการ'), findsOneWidget);
+    expect(find.text('สมชาย'), findsOneWidget);
+    expect(find.text('นัดหมายแพทย์'), findsOneWidget);
+    expect(find.textContaining('โรงพยาบาลศิริราช', findRichText: true), findsOneWidget);
+    await disposeApp(tester);
+  });
+
+  testWidgets('adding a relative requires name and phone, then saves', (tester) async {
+    final s = await pumpApp(tester);
+    await openContacts(tester);
+    await tapVisible(tester, find.text('+ เพิ่มญาติ'));
+    await tapVisible(tester, find.widgetWithText(FilledButton, 'บันทึก'));
+    expect(find.text('กรุณากรอกชื่อและเบอร์โทร'), findsOneWidget);
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'สมหญิง');
+    await tester.enterText(fields.at(1), 'ลูกสาว');
+    await tester.enterText(fields.at(2), '0899999999');
+    await tapVisible(tester, find.widgetWithText(FilledButton, 'บันทึก'));
+    expect(s.data.relatives.map((r) => r.name), ['สมชาย', 'สมหญิง']);
+    expect(find.text('สมหญิง'), findsOneWidget);
+    await disposeApp(tester);
+  });
+
+  testWidgets('deleting a relative asks for confirmation', (tester) async {
+    final s = await pumpApp(tester);
+    await openContacts(tester);
+    await tapVisible(tester, find.widgetWithText(OutlinedButton, 'แก้ไข'));
+    await tapVisible(tester, find.widgetWithText(OutlinedButton, 'ลบ'));
+    expect(find.text('ต้องการลบ "สมชาย" ใช่หรือไม่?'), findsOneWidget);
+    await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('ลบ')));
+    await tester.pumpAndSettle();
+    expect(s.data.relatives, isEmpty);
+    await disposeApp(tester);
+  });
+
+  testWidgets('rescheduled appointment shows the previous time', (tester) async {
+    final d = AppData.seed(testNow).copyWith(appts: const [
+      Appt(
+        id: 'a1',
+        at: '2026-11-12T10:00',
+        place: 'รพ.',
+        dept: '',
+        note: '',
+        status: 'rescheduled',
+        previousAt: '2026-11-09T09:30',
+      ),
+    ]);
+    final s = await makeState(prefs: {'caredose': jsonEncode(d.toJson())});
+    await pumpApp(tester, state: s);
+    await openContacts(tester);
+    expect(find.text('เลื่อนนัด'), findsOneWidget);
+    expect(find.text('กำหนดเดิม'), findsOneWidget);
+    expect(find.textContaining('ไม่ระบุ', findRichText: true), findsOneWidget);
+    await disposeApp(tester);
+  });
+}
