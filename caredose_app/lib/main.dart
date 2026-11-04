@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app.dart';
 import 'lifecycle_reloader.dart';
 import 'services/notification_service.dart';
 import 'services/storage.dart';
 import 'state/app_state.dart';
-import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,12 +18,6 @@ Future<void> main() async {
   await service.reschedule(state.data, state.dismissed, state.now);
   runApp(ChangeNotifierProvider.value(
     value: state,
-    child: LifecycleReloader(
-      child: MaterialApp(
-        title: 'CareDose',
-        theme: buildTheme(),
-        home: const Scaffold(body: Center(child: Text('CareDose'))),
-      ),
-    ),
+    child: const LifecycleReloader(child: CareDoseApp()),
   ));
 }
