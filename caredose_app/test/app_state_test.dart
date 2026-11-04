@@ -110,6 +110,24 @@ void main() {
     expect(s.dismissed, isEmpty);
   });
 
+  test('applyNotificationAction taken logs; notyet dismisses without log', () async {
+    final (s, sched, _) = await make();
+    const key = 'm1|2026-11-04|08:00';
+    await s.applyNotificationAction('notyet', key);
+    expect(s.data.logs.containsKey(key), false);
+    expect(s.dismissed, {key});
+    await s.applyNotificationAction('taken', key);
+    expect(s.data.logs[key]?.status, 'taken');
+    expect(sched.calls, 2);
+  });
+
+  test('reload without disk changes does not reschedule', () async {
+    final (s, sched, _) = await make();
+    await s.reload();
+    await s.reload();
+    expect(sched.calls, 0);
+  });
+
   test('tick refreshes now from the clock and reload re-reads storage', () async {
     var t = DateTime(2026, 11, 4, 9);
     final (s, _, storage) = await make(clock: () => t);

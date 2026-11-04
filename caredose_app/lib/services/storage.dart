@@ -11,6 +11,9 @@ class Storage {
   static const _key = 'caredose';
   static const _dismissedKey = 'caredose_dismissed';
 
+  /// Re-reads values written by another isolate (notification button handler).
+  Future<void> refresh() => _p.reload();
+
   /// Reads saved data merged over the seed; any unreadable value yields the seed.
   AppData load(DateTime now) {
     final seed = AppData.seed(now);

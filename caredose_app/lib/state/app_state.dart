@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../logic/bmi.dart';
 import '../logic/dose_items.dart';
 import '../models/models.dart';
+import '../services/notification_actions.dart';
 import '../services/storage.dart';
 
 abstract class NotificationScheduler {
@@ -52,14 +55,30 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Re-read storage (e.g. after a background notification action) and reschedule.
+  /// Re-read storage (a notification button may have written to it from a
+  /// background isolate). Replaces state and reschedules only if it changed.
   Future<void> reload() async {
     await flush();
+    await _storage.refresh();
     now = _clock();
-    data = _storage.load(now);
-    dismissed = _storage.loadDismissed();
+    final fresh = _storage.load(now);
+    final freshDismissed = _storage.loadDismissed();
+    if (jsonEncode(fresh.toJson()) == jsonEncode(data.toJson()) && setEquals(freshDismissed, dismissed)) {
+      notifyListeners();
+      return;
+    }
+    data = fresh;
+    dismissed = freshDismissed;
     notifyListeners();
     await _scheduler.reschedule(data, dismissed, now);
+  }
+
+  /// Handles a notification button pressed while the app process is alive.
+  Future<void> applyNotificationAction(String actionId, String key) async {
+    final r = applyDoseAction(data, dismissed, actionId, key, _clock());
+    dismissed = r.dismissed;
+    _commit(r.data);
+    await flush();
   }
 
   void _setLog(String key, DoseStatus s) {
