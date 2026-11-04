@@ -236,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Row(children: [
           Expanded(child: FilledButton(onPressed: () => s.mark(it, DoseStatus.taken), child: const Text('ทานแล้ว'))),
           const SizedBox(width: 8),
-          Expanded(child: OutlinedButton(onPressed: () => s.mark(it, DoseStatus.skipped), child: const Text('ไม่ได้ทาน'))),
+          Expanded(child: OutlinedButton(onPressed: () => s.mark(it, DoseStatus.skipped), child: const Text('ยังไม่ได้ทาน'))),
         ]),
       const SizedBox(height: 8),
       OutlinedButton(onPressed: () => _openDetail(it.med), child: const Text('ดูรายละเอียด')),

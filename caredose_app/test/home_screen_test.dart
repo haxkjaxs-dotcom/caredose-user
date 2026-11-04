@@ -25,10 +25,10 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('the not-taken button logs skipped and the old ข้ามยา wording is gone', (tester) async {
+  testWidgets('the ยังไม่ได้ทาน button logs skipped and the old ข้ามยา wording is gone', (tester) async {
     final s = await pumpApp(tester);
     expect(find.text('ข้ามยา'), findsNothing);
-    final button = find.widgetWithText(OutlinedButton, 'ไม่ได้ทาน').first;
+    final button = find.widgetWithText(OutlinedButton, 'ยังไม่ได้ทาน').first;
     await tester.ensureVisible(button);
     await tester.tap(button);
     await tester.pumpAndSettle();

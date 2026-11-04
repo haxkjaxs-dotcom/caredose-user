@@ -7,7 +7,7 @@ String doseStatusLabel(DoseStatus s) {
     case DoseStatus.taken:
       return 'ทานแล้ว';
     case DoseStatus.skipped:
-      return 'ข้าม';
+      return 'ยังไม่ได้ทาน';
     case DoseStatus.pending:
       return 'รอทาน';
     case DoseStatus.missed:

@@ -196,7 +196,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   decoration: BoxDecoration(color: const Color(0xFFF0FDF4), border: Border.all(color: const Color(0xFF15803D), width: 2), borderRadius: BorderRadius.circular(16)),
                   child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('หยุดเตือนอัตโนมัติ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF052E16))),
-                    Text('ระบบจะหยุดแจ้งเตือนรายการนั้นทันที เมื่อกด “ทานแล้ว” หรือ “ไม่ได้ทาน” ส่วน “ยังไม่ทาน” จะไม่เตือนซ้ำและรอรอบยาถัดไป',
+                    Text('ระบบจะหยุดแจ้งเตือนรายการนั้นทันที เมื่อกด “ทานแล้ว” หรือ “ยังไม่ได้ทาน” ส่วนปุ่ม “ยังไม่ทาน” บนการแจ้งเตือนจะไม่เตือนซ้ำและรอรอบยาถัดไป',
                         style: TextStyle(fontSize: 14, color: Color(0xFF052E16))),
                   ]),
                 ),

@@ -54,7 +54,7 @@ void main() {
 
   test('status labels are Thai', () {
     expect(doseStatusLabel(DoseStatus.taken), 'ทานแล้ว');
-    expect(doseStatusLabel(DoseStatus.skipped), 'ข้าม');
+    expect(doseStatusLabel(DoseStatus.skipped), 'ยังไม่ได้ทาน');
     expect(doseStatusLabel(DoseStatus.pending), 'รอทาน');
     expect(doseStatusLabel(DoseStatus.missed), 'เลยเวลา');
   });

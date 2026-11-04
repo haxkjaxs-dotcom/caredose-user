@@ -19,7 +19,7 @@ const _iosCategory = 'dose';
 List<(String, String)> doseActions() => const [
       ('taken', 'ทานแล้ว'),
       ('notyet', 'ยังไม่ทาน'),
-      ('skip', 'ไม่ได้ทาน'),
+      ('skip', 'ยังไม่ได้ทาน'),
     ];
 
 /// Runs in a background isolate when a button is pressed and the app UI is not shown.

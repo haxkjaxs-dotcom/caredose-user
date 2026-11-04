@@ -23,7 +23,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final items = itemsFor(s.data, day, s.now);
     if (items.isEmpty) return const CalendarMeta('ไม่มี', Color(0xFFF5F5F4), stone600, stone300);
     if (items.any((i) => i.status == DoseStatus.missed)) return const CalendarMeta('พลาด', Color(0xFFFEE2E2), Color(0xFF7F1D1D), Color(0xFFEF4444));
-    if (items.any((i) => i.status == DoseStatus.skipped)) return const CalendarMeta('ข้าม', Color(0xFFDBEAFE), Color(0xFF1E3A8A), Color(0xFF3B82F6));
+    if (items.any((i) => i.status == DoseStatus.skipped)) return const CalendarMeta('ยังไม่ได้ทาน', Color(0xFFDBEAFE), Color(0xFF1E3A8A), Color(0xFF3B82F6));
     if (items.every((i) => i.status == DoseStatus.taken)) return const CalendarMeta('ครบ', Color(0xFFDCFCE7), Color(0xFF14532D), Color(0xFF16A34A));
     return const CalendarMeta('รอทาน', Color(0xFFFEF3C7), Color(0xFF78350F), Color(0xFFD97706));
   }
@@ -67,7 +67,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             _legend('ครบ', 'ทานครบแล้ว', const Color(0xFF166534)),
             _legend('รอทาน', 'ยังไม่ถึงเวลา', const Color(0xFF92400E)),
             _legend('พลาด', 'เลยเวลา', const Color(0xFF991B1B)),
-            _legend('ข้าม', 'ไม่ได้ทาน', const Color(0xFF1E40AF)),
+            _legend('ยังไม่ได้ทาน', 'กดบันทึกว่ายังไม่ได้ทาน', const Color(0xFF1E40AF)),
             _legend('ไม่มี', 'ไม่มีรายการยา', stone600),
           ]),
         ]),
