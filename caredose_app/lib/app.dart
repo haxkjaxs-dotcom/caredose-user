@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/bmi_screen.dart';
+import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
@@ -62,6 +63,8 @@ class _ShellState extends State<_Shell> {
         return const HomeScreen();
       case 1:
         return const BmiScreen();
+      case 2:
+        return const HistoryScreen();
       default:
         return const Center(child: Text('เร็ว ๆ นี้'));
     }
