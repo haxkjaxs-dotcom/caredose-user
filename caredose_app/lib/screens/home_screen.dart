@@ -9,7 +9,6 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
-import '../widgets/med_form.dart';
 
 Color _hex(String h) => Color(int.parse('FF${h.replaceFirst('#', '')}', radix: 16));
 
@@ -36,23 +35,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _bulkTimer = Timer(const Duration(seconds: 6), () {
       if (mounted) setState(() => _bulk = null);
     });
-  }
-
-  void _openForm(Med? initial) {
-    final s = context.read<AppState>();
-    showAppSheet<void>(
-      context,
-      title: initial == null ? 'เพิ่มยา' : 'แก้ไขยา',
-      builder: (ctx) => MedForm(
-        initial: initial,
-        count: s.data.meds.length,
-        today: todayKey(s.now),
-        onSave: (m) {
-          s.saveMed(m);
-          Navigator.pop(ctx);
-        },
-      ),
-    );
   }
 
   void _openDetail(Med med) {
@@ -136,12 +118,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 20),
-        Row(children: [
-          const Expanded(child: Text('ยาวันนี้', style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold))),
-          FilledButton(onPressed: () => _openForm(null), child: const Text('+ เพิ่มยา')),
-        ]),
+        const Text('ยาวันนี้', style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
         const SizedBox(height: 20),
-        if (items.isEmpty) const AppCard(child: Text('ยังไม่มียาในวันนี้ กด “เพิ่มยา” เพื่อเริ่มต้น')),
+        if (items.isEmpty) const AppCard(child: Text('ยังไม่มียาในวันนี้ แพทย์จะเป็นผู้เพิ่มยาให้')),
         for (final time in times) ...[
           _mealCard(s, items.where((i) => i.time == time).toList(), time, due),
           const SizedBox(height: 20),
@@ -257,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Row(children: [
           Expanded(child: FilledButton(onPressed: () => s.mark(it, DoseStatus.taken), child: const Text('ทานแล้ว'))),
           const SizedBox(width: 8),
-          Expanded(child: OutlinedButton(onPressed: () => s.mark(it, DoseStatus.skipped), child: const Text('ข้ามยา'))),
+          Expanded(child: OutlinedButton(onPressed: () => s.mark(it, DoseStatus.skipped), child: const Text('ไม่ได้ทาน'))),
         ]),
       const SizedBox(height: 8),
       OutlinedButton(onPressed: () => _openDetail(it.med), child: const Text('ดูรายละเอียด')),

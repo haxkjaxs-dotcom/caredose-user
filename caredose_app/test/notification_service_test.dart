@@ -6,7 +6,7 @@ void main() {
     expect(doseActions(), [
       ('taken', 'ทานแล้ว'),
       ('notyet', 'ยังไม่ทาน'),
-      ('skip', 'ข้ามยา'),
+      ('skip', 'ไม่ได้ทาน'),
     ]);
   });
 }

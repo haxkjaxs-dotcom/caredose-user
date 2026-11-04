@@ -67,7 +67,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             _legend('ครบ', 'ทานครบแล้ว', const Color(0xFF166534)),
             _legend('รอทาน', 'ยังไม่ถึงเวลา', const Color(0xFF92400E)),
             _legend('พลาด', 'เลยเวลา', const Color(0xFF991B1B)),
-            _legend('ข้าม', 'ข้ามยา', const Color(0xFF1E40AF)),
+            _legend('ข้าม', 'ไม่ได้ทาน', const Color(0xFF1E40AF)),
             _legend('ไม่มี', 'ไม่มีรายการยา', stone600),
           ]),
         ]),

@@ -1,5 +1,3 @@
-import 'package:caredose/models/models.dart';
-import 'package:caredose/widgets/med_form.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,16 +25,21 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('add-medicine form rejects an empty name', (tester) async {
+  testWidgets('the not-taken button logs skipped and the old ข้ามยา wording is gone', (tester) async {
+    final s = await pumpApp(tester);
+    expect(find.text('ข้ามยา'), findsNothing);
+    final button = find.widgetWithText(OutlinedButton, 'ไม่ได้ทาน').first;
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(s.data.logs.values.single.status, 'skipped');
+    await disposeApp(tester);
+  });
+
+  testWidgets('patients cannot add medicines; the doctor does', (tester) async {
     await pumpApp(tester);
-    await tester.tap(find.text('+ เพิ่มยา'));
-    await tester.pumpAndSettle();
-    final save = find.widgetWithText(FilledButton, 'บันทึก');
-    await tester.ensureVisible(save);
-    await tester.pumpAndSettle();
-    await tester.tap(save);
-    await tester.pumpAndSettle();
-    expect(find.text('กรุณากรอกชื่อยา'), findsOneWidget);
+    expect(find.text('+ เพิ่มยา'), findsNothing);
+    expect(find.textContaining('เพิ่มยา'), findsNothing);
     await disposeApp(tester);
   });
 
@@ -46,15 +49,5 @@ void main() {
     await pumpApp(tester, state: state);
     expect(tester.takeException(), isNull);
     await disposeApp(tester);
-  });
-
-  test('validateMed messages', () {
-    const ok = Med(id: '1', name: 'a', times: ['08:00'], start: '2026-11-04');
-    expect(validateMed(ok), isNull);
-    expect(validateMed(ok.copyWith(name: '  ')), 'กรุณากรอกชื่อยา');
-    expect(validateMed(ok.copyWith(times: [])), 'กรุณาระบุเวลาเตือน');
-    expect(validateMed(ok.copyWith(times: [''])), 'กรุณาระบุเวลาเตือน');
-    expect(validateMed(ok.copyWith(end: '2026-11-03')), 'วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');
-    expect(validateMed(ok.copyWith(end: '2026-11-04')), isNull);
   });
 }
