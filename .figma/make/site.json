@@ -1,0 +1,10 @@
+{
+  "description": "Explore and manage the content provided in a clear, accessible interface designed to help users quickly find the information they need.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

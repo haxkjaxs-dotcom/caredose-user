@@ -1,0 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Noto Sans Thai', system-ui, sans-serif;
+  --color-ink: #14262b;
+  --color-brand: #0b6b63;
+  --color-brand-dark: #08504a;
+  --color-paper: #f4f1ea;
+}
+
+@layer base {
+  html { font-size: 18px; }
+  html[data-size='large'] { font-size: 21px; }
+  html[data-size='xl'] { font-size: 24px; }
+  body { background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); }
+  button, input, select, textarea { min-height: 48px; }
+}
