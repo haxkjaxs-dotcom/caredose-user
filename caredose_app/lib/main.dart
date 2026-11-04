@@ -11,11 +11,8 @@ import 'state/app_state.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final service = NotificationService();
-  late final AppState state;
-  await service.init(onAction: (action, key) => state.applyNotificationAction(action, key));
-  state = AppState(Storage(await SharedPreferences.getInstance()), service);
-  await service.requestPermissions();
-  await service.reschedule(state.data, state.dismissed, state.now);
+  final state = AppState(Storage(await SharedPreferences.getInstance()), service);
+  // Show the UI first; a notification setup failure must never leave a blank app.
   runApp(MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: state),
@@ -23,4 +20,16 @@ Future<void> main() async {
     ],
     child: const LifecycleReloader(child: CareDoseApp()),
   ));
+  await _startNotifications(service, state);
+}
+
+Future<void> _startNotifications(NotificationService service, AppState state) async {
+  try {
+    await service.init(onAction: state.applyNotificationAction);
+    await service.requestPermissions();
+    await state.reload();
+    await service.reschedule(state.data, state.dismissed, DateTime.now());
+  } catch (e) {
+    debugPrint('notification setup failed: $e');
+  }
 }

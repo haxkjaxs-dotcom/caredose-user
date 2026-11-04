@@ -10,6 +10,14 @@ List<T> _list<T>(dynamic v, T Function(Json) f) =>
 
 const medColors = ['#e9b44c', '#7fb7a4', '#e07a5f', '#8aa1d6', '#c58fc2'];
 
+final _hhmm = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');
+
+bool _validDate(String s) {
+  if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)) return false;
+  final d = DateTime.tryParse(s);
+  return d != null && dateKey(d) == s;
+}
+
 class Med {
   final String id, name, dosage, meal, start, end, note, color;
   final List<String> times;
@@ -30,9 +38,10 @@ class Med {
         name: _str(j['name']),
         dosage: _str(j['dosage']),
         meal: _str(j['meal']),
-        times: j['times'] is List ? (j['times'] as List).whereType<String>().toList() : <String>[],
-        start: _str(j['start']),
-        end: _str(j['end']),
+        // Malformed values would make DateTime.parse throw in itemsFor/planNotifications.
+        times: j['times'] is List ? (j['times'] as List).whereType<String>().where(_hhmm.hasMatch).toList() : <String>[],
+        start: _validDate(_str(j['start'])) ? _str(j['start']) : '',
+        end: _validDate(_str(j['end'])) ? _str(j['end']) : '',
         note: _str(j['note']),
         color: _str(j['color'], '#e9b44c'),
       );

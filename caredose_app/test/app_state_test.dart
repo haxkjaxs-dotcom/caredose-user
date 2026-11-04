@@ -8,10 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class FakeScheduler implements NotificationScheduler {
   int calls = 0;
   AppData? last;
+  DateTime? lastNow;
   @override
   Future<void> reschedule(AppData d, Set<String> dismissed, DateTime now) async {
     calls++;
     last = d;
+    lastNow = now;
   }
 }
 
@@ -128,14 +130,52 @@ void main() {
     expect(sched.calls, 0);
   });
 
-  test('tick refreshes now from the clock and reload re-reads storage', () async {
+  test('tick refreshes now from the clock', () async {
     var t = DateTime(2026, 11, 4, 9);
-    final (s, _, storage) = await make(clock: () => t);
+    final (s, _, _) = await make(clock: () => t);
     t = DateTime(2026, 11, 4, 9, 30);
     s.tick();
     expect(s.now, DateTime(2026, 11, 4, 9, 30));
-    await storage.save(s.data.copyWith(patient: 'จากพื้นหลัง'));
+  });
+
+  const key = 'm1|2026-11-04|08:00';
+
+  test('button pressed in background is not overwritten by a later in-app edit', () async {
+    final (s, _, storage) = await make();
+    await storage.appendPending('taken\t$key\t2026-11-04T09:00:00.000');
+    s.setPatient('แก้ในแอป');
+    await s.flush();
+    expect(s.data.logs[key]?.status, 'taken');
+    expect(storage.load(s.now).logs[key]?.status, 'taken');
+    expect(storage.loadPending(), isEmpty);
+  });
+
+  test('notyet from background survives later edits so the repeat is not recreated', () async {
+    final (s, _, storage) = await make();
+    await storage.appendPending('notyet\t$key\t2026-11-04T09:00:00.000');
+    s.setPatient('x');
+    await s.flush();
+    expect(s.dismissed, {key});
+    expect(storage.loadDismissed(), {key});
+    expect(s.data.logs.containsKey(key), false);
+  });
+
+  test('reload applies pending background actions and reschedules once', () async {
+    final (s, sched, storage) = await make();
+    await storage.appendPending('skip\t$key\t2026-11-04T09:00:00.000');
     await s.reload();
-    expect(s.data.patient, 'จากพื้นหลัง');
+    expect(s.data.logs[key]?.status, 'skipped');
+    expect(sched.calls, 1);
+    await s.reload();
+    expect(sched.calls, 1);
+  });
+
+  test('reschedule uses the clock at persist time, not a stale now', () async {
+    var t = DateTime(2026, 11, 4, 9);
+    final (s, sched, _) = await make(clock: () => t);
+    t = DateTime(2026, 11, 4, 9, 0, 30);
+    s.setPatient('x');
+    await s.flush();
+    expect(sched.lastNow, DateTime(2026, 11, 4, 9, 0, 30));
   });
 }

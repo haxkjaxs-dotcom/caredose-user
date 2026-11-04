@@ -9,7 +9,6 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../models/models.dart';
 import '../state/app_state.dart';
-import 'notification_actions.dart';
 import 'notification_plan.dart';
 import 'storage.dart';
 
@@ -30,13 +29,9 @@ Future<void> notificationBackgroundHandler(NotificationResponse r) async {
   final action = r.actionId;
   if (key == null || action == null || action.isEmpty) return;
   DartPluginRegistrant.ensureInitialized();
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.reload();
-  final storage = Storage(prefs);
-  final now = DateTime.now();
-  final res = applyDoseAction(storage.load(now), storage.loadDismissed(), action, key, now);
-  await storage.save(res.data);
-  await storage.saveDismissed(res.dismissed);
+  // Queue only: AppState is the single writer of the main data and applies this on its next save/reload.
+  final storage = Storage(await SharedPreferences.getInstance());
+  await storage.appendPending('$action\t$key\t${DateTime.now().toIso8601String()}');
   await FlutterLocalNotificationsPlugin().cancel(id: notificationId(key, repeat: true));
 }
 
@@ -121,21 +116,27 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
   Future<void> reschedule(AppData d, Set<String> dismissed, DateTime now) async {
     if (!_ready) return;
     await _plugin.cancelAll();
-    final plan = planNotifications(d, dismissed, now);
+    // zonedSchedule throws for a date already past, so keep a small lead over "now".
+    final plan = planNotifications(d, dismissed, now.add(const Duration(seconds: 5)));
     if (plan.isEmpty) return;
     final exact = await _android?.canScheduleExactNotifications() ?? true;
     final mode = exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexactAllowWhileIdle;
     final details = _details();
     for (final p in plan) {
-      await _plugin.zonedSchedule(
-        id: p.id,
-        title: p.title,
-        body: p.body,
-        scheduledDate: tz.TZDateTime.from(p.at, tz.local),
-        notificationDetails: details,
-        androidScheduleMode: mode,
-        payload: p.payload,
-      );
+      try {
+        await _plugin.zonedSchedule(
+          id: p.id,
+          title: p.title,
+          body: p.body,
+          scheduledDate: tz.TZDateTime.from(p.at, tz.local),
+          notificationDetails: details,
+          androidScheduleMode: mode,
+          payload: p.payload,
+        );
+      } catch (e) {
+        // One rejected entry must not drop the rest of the schedule.
+        debugPrint('schedule ${p.payload} failed: $e');
+      }
     }
   }
 }

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 
 import '../logic/bmi.dart';
@@ -44,16 +42,31 @@ class AppState extends ChangeNotifier {
   }
 
   void _persist() {
-    final snapshot = data;
-    final dis = {...dismissed};
-    final at = now;
     _last = _last.then((_) async {
-      await _storage.save(snapshot);
-      await _storage.saveDismissed(dis);
-      await _scheduler.reschedule(snapshot, dis, at);
+      // Apply background button presses first so this save cannot overwrite them.
+      if (await _drainPending()) notifyListeners();
+      await _storage.save(data);
+      await _storage.saveDismissed(dismissed);
+      await _scheduler.reschedule(data, dismissed, _clock());
     }).catchError((Object e) {
       debugPrint('persist/reschedule failed: $e');
     });
+  }
+
+  /// Applies button presses queued by the background isolate. Returns true if any.
+  Future<bool> _drainPending() async {
+    await _storage.refresh();
+    final entries = _storage.loadPending();
+    if (entries.isEmpty) return false;
+    for (final e in entries) {
+      final p = e.split('\t');
+      if (p.length != 3) continue;
+      final r = applyDoseAction(data, dismissed, p[0], p[1], DateTime.tryParse(p[2]) ?? _clock());
+      data = r.data;
+      dismissed = r.dismissed;
+    }
+    await _storage.removePending(entries.length);
+    return true;
   }
 
   void tick() {
@@ -61,22 +74,18 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Re-read storage (a notification button may have written to it from a
-  /// background isolate). Replaces state and reschedules only if it changed.
+  /// Picks up notification-button presses made while the UI was not running
+  /// or not showing. Saves and reschedules only if there were any.
   Future<void> reload() async {
     await flush();
-    await _storage.refresh();
     now = _clock();
-    final fresh = _storage.load(now);
-    final freshDismissed = _storage.loadDismissed();
-    if (jsonEncode(fresh.toJson()) == jsonEncode(data.toJson()) && setEquals(freshDismissed, dismissed)) {
+    if (await _drainPending()) {
       notifyListeners();
-      return;
+      _persist();
+      await flush();
+    } else {
+      notifyListeners();
     }
-    data = fresh;
-    dismissed = freshDismissed;
-    notifyListeners();
-    await _scheduler.reschedule(data, dismissed, now);
   }
 
   /// Handles a notification button pressed while the app process is alive.

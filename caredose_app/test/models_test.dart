@@ -28,6 +28,20 @@ void main() {
     expect(m.id, 'x');
   });
 
+  test('malformed times and dates are dropped instead of crashing later', () {
+    final m = Med.fromJson({
+      'id': 'x',
+      'name': 'a',
+      'times': ['8:00', '08:00', '24:00', 'x', '12:60', '23:59'],
+      'start': 'x',
+      'end': '2026-13-45',
+    });
+    expect(m.times, ['08:00', '23:59']);
+    expect(m.start, '');
+    expect(m.end, '');
+    expect(Med.fromJson({'start': '2026-11-04', 'end': '2026-12-01'}).end, '2026-12-01');
+  });
+
   test('appt omits null optional fields in JSON', () {
     final a = Appt(id: 'a', at: '2026-11-09T09:30', place: 'p', dept: '', note: '');
     expect(a.toJson().containsKey('status'), false);
