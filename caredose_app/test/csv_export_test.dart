@@ -19,6 +19,17 @@ void main() {
     expect(csv.contains('"ยา ""A"""'), true);
   });
 
+  test('cells that Excel would run as formulas are neutralised', () {
+    for (final evil in ['=HYPERLINK("http://x","คลิก")', '+1+1', '-2+3', '@SUM(A1)', '\t=1', '\r=1']) {
+      final m = med.copyWith(note: evil);
+      final csv = buildCsv(data([m]), '2026-11-04', '2026-11-04', now);
+      final line = csv.split('\r\n')[1];
+      expect(line.endsWith('"\'${evil.replaceAll('"', '""')}"'), true, reason: evil); // note is the last cell
+    }
+    // plain text and negative-looking dosages that are not at the start stay untouched
+    expect(buildCsv(data([med]), '2026-11-04', '2026-11-04', now).contains('"หมายเหตุ"'), true);
+  });
+
   test('range is inclusive on both ends and excludes outside days', () {
     final csv = buildCsv(data([med]), '2026-11-04', '2026-11-05', now);
     final lines = csv.split('\r\n');

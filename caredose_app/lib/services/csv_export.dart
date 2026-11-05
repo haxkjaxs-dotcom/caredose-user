@@ -28,7 +28,11 @@ String buildCsv(AppData d, String from, String to, DateTime now) {
       ]);
     }
   }
-  String esc(String s) => '"${s.replaceAll('"', '""')}"';
+  // A leading ' stops Excel from running the cell as a formula (CSV/formula injection).
+  String esc(String s) {
+    final v = RegExp(r'^[=+\-@\t\r]').hasMatch(s) ? "'$s" : s;
+    return '"${v.replaceAll('"', '""')}"';
+  }
   return '﻿${rows.map((r) => r.map(esc).join(',')).join('\r\n')}';
 }
 
