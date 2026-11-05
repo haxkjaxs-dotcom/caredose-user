@@ -661,7 +661,8 @@ function History({ d, now }: { d: Data; now: Date }) {
     for (let t = new Date(from + 'T00:00'); dkey(t) <= to; t.setDate(t.getDate() + 1)) {
       for (const i of itemsFor(d, dkey(t), now)) rows.push([dkey(t), i.time, i.med.name, i.med.dosage, STATUS[i.status].label, i.log ? new Date(i.log.at).toLocaleString('th-TH') : '', i.med.note])
     }
-    const esc = (s: string) => `"${s.replace(/"/g, '""')}"`
+    // A leading ' stops Excel from running the cell as a formula (CSV/formula injection).
+    const esc = (s: string) => `"${(/^[=+\-@\t\r]/.test(s) ? `'${s}` : s).replace(/"/g, '""')}"`
     const csv = '\uFEFF' + rows.map((r) => r.map(esc).join(',')).join('\r\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
