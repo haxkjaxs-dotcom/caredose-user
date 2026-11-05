@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'auth_gate.dart';
 import 'screens/bmi_screen.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/history_screen.dart';
@@ -26,7 +27,7 @@ class CareDoseApp extends StatelessWidget {
         data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScaleFor(size))),
         child: child!,
       ),
-      home: const _Shell(),
+      home: const AuthGate(child: _Shell()),
     );
   }
 }

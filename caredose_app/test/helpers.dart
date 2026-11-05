@@ -1,11 +1,15 @@
 import 'package:caredose/app.dart';
+import 'package:caredose/logic/auth_validators.dart';
 import 'package:caredose/models/models.dart';
 import 'package:caredose/services/storage.dart';
 import 'package:caredose/state/app_state.dart';
+import 'package:caredose/state/auth_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'fake_auth_repository.dart';
 
 class FakeScheduler implements NotificationScheduler {
   int calls = 0;
@@ -38,15 +42,33 @@ Future<AppState> makeState({Map<String, Object> prefs = const {}}) async {
   return AppState(Storage(await SharedPreferences.getInstance()), lastScheduler, clock: () => testNow);
 }
 
-/// Pumps the whole app on a 360x800 phone-sized screen.
-Future<AppState> pumpApp(WidgetTester tester, {AppState? state, FakePermissions? permissions}) async {
+/// Auth objects of the most recent [pumpApp] call (signed in with a profile unless overridden).
+late AuthState lastAuth;
+late FakeAuthRepository lastAuthRepo;
+
+/// Pumps the whole app on a 360x800 phone-sized screen. By default the user is already
+/// signed in with a profile, so tests land on the main app; pass [signedIn]=false for the login flow.
+Future<AppState> pumpApp(WidgetTester tester, {AppState? state, FakePermissions? permissions, bool signedIn = true}) async {
   tester.view.physicalSize = const Size(360, 800);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   final s = state ?? await makeState();
+  lastAuthRepo = FakeAuthRepository(signedIn: signedIn, stored: signedIn ? sampleProfile : null);
+  // Same wiring as main(): a fresh sign-in fills the local name/phone; sign out wipes local data.
+  lastAuth = AuthState(
+    lastAuthRepo,
+    await SharedPreferences.getInstance(),
+    onSignedIn: (p, phone) {
+      s.setPatient(p.nickname);
+      s.setVerifiedPhone(displayPhone(phone));
+    },
+    onSignedOut: () => s.resetAll(),
+  );
+  await lastAuth.init();
   await tester.pumpWidget(MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: s),
+      ChangeNotifierProvider<AuthState>.value(value: lastAuth),
       Provider<NotificationPermissions>.value(value: permissions ?? FakePermissions()),
     ],
     child: const CareDoseApp(),

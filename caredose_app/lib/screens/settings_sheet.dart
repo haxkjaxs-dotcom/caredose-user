@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
+import '../state/auth_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -16,10 +17,7 @@ class SettingsSheet extends StatefulWidget {
 
 class _SettingsSheetState extends State<SettingsSheet> {
   late final TextEditingController name = TextEditingController(text: context.read<AppState>().data.patient);
-  final newPhone = TextEditingController();
-  final otp = TextEditingController();
-  bool about = false, changePhone = false, otpSent = false, permissionOk = true;
-  String otpError = '';
+  bool about = false, permissionOk = true;
 
   @override
   void initState() {
@@ -30,8 +28,6 @@ class _SettingsSheetState extends State<SettingsSheet> {
   @override
   void dispose() {
     name.dispose();
-    newPhone.dispose();
-    otp.dispose();
     super.dispose();
   }
 
@@ -45,37 +41,23 @@ class _SettingsSheetState extends State<SettingsSheet> {
     await _checkPermission();
   }
 
-  void _sendOtp() {
-    if (newPhone.text.replaceAll(RegExp(r'\D'), '').length < 9) {
-      setState(() => otpError = 'กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง');
-      return;
+  Future<void> _signOut() async {
+    final auth = context.read<AuthState>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: const Text('ออกจากระบบ? ข้อมูลยาและประวัติในเครื่องนี้จะถูกล้างด้วย'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('ยกเลิก')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('ออกจากระบบ')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await auth.signOut();
+      widget.onClose();
     }
-    setState(() {
-      otpError = '';
-      otpSent = true;
-    });
   }
-
-  void _verifyOtp() {
-    if (!RegExp(r'^\d{6}$').hasMatch(otp.text)) {
-      setState(() => otpError = 'กรุณากรอกรหัส OTP 6 หลัก');
-      return;
-    }
-    context.read<AppState>().setVerifiedPhone(newPhone.text);
-    newPhone.clear();
-    otp.clear();
-    setState(() {
-      changePhone = false;
-      otpSent = false;
-      otpError = '';
-    });
-  }
-
-  void _cancelPhone() => setState(() {
-        changePhone = false;
-        otpSent = false;
-        otpError = '';
-      });
 
   Future<void> _reset() async {
     final s = context.read<AppState>();
@@ -208,11 +190,13 @@ class _SettingsSheetState extends State<SettingsSheet> {
       const SizedBox(height: 20),
       OutlinedButton(style: dangerStyle(), onPressed: _reset, child: const Text('จัดการข้อมูลในเครื่อง: ล้างข้อมูล')),
       const SizedBox(height: 20),
+      OutlinedButton(style: dangerStyle(), onPressed: _signOut, child: const Text('ออกจากระบบ')),
+      const SizedBox(height: 20),
       OutlinedButton(onPressed: () => setState(() => about = !about), child: const Text('เกี่ยวกับแอป')),
       if (about)
         const Padding(
           padding: EdgeInsets.only(top: 12),
-          child: Text('CareDose (ยาอุ่นใจ) เวอร์ชัน MVP ข้อมูลทั้งหมดเก็บในเครื่องนี้เท่านั้น ไม่มีระบบบัญชี จึงไม่มีเมนูออกจากระบบ', style: TextStyle(fontSize: 14)),
+          child: Text('CareDose (ยาอุ่นใจ) ข้อมูลยาและประวัติการทานยาเก็บในเครื่องนี้ ส่วนข้อมูลส่วนตัวเก็บในระบบหลังเข้าสู่ระบบด้วยเบอร์โทร', style: TextStyle(fontSize: 14)),
         ),
     ]);
   }
@@ -230,58 +214,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
           const Pill('ยืนยันด้วย OTP แล้ว', bg: Color(0xFFDCFCE7), fg: Color(0xFF14532D), border: Color(0xFF15803D)),
         ]),
         const SizedBox(height: 8),
-        const Text('ใช้เบอร์เดียวกับที่ยืนยันตอนเข้าสู่ระบบ ไม่ต้องกรอกซ้ำ (ขั้นตอน OTP เป็นตัวอย่าง ยังไม่ได้ส่งรหัสจริง)', style: TextStyle(fontSize: 14, color: stone600)),
-        const SizedBox(height: 12),
-        if (!changePhone)
-          OutlinedButton(onPressed: () => setState(() => changePhone = true), child: const Text('เปลี่ยนเบอร์และยืนยัน OTP'))
-        else ...[
-          const Divider(thickness: 2),
-          LabeledField(
-            'เบอร์โทรศัพท์ใหม่',
-            child: TextField(
-              key: const ValueKey('new-phone'),
-              controller: newPhone,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(hintText: 'เช่น 0812345678'),
-              onChanged: (_) => setState(() {
-                otpSent = false;
-                otp.clear();
-                otpError = '';
-              }),
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (!otpSent)
-            FilledButton(onPressed: _sendOtp, child: const Text('ส่งรหัส OTP'))
-          else ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: tealTint, borderRadius: BorderRadius.circular(12)),
-              child: Text('ส่งรหัส OTP ไปยัง ${newPhone.text} แล้ว', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: brandDark)),
-            ),
-            const SizedBox(height: 12),
-            LabeledField(
-              'รหัส OTP 6 หลัก',
-              child: TextField(
-                key: const ValueKey('otp'),
-                controller: otp,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 21, letterSpacing: 4),
-                decoration: const InputDecoration(hintText: '000000', counterText: ''),
-                onChanged: (_) => setState(() => otpError = ''),
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: _verifyOtp, child: const Text('ยืนยันและใช้เบอร์นี้')),
-            const SizedBox(height: 8),
-            OutlinedButton(onPressed: _sendOtp, child: const Text('ส่งรหัสอีกครั้ง')),
-          ],
-          if (otpError.isNotEmpty) ...[const SizedBox(height: 12), ErrorBox(otpError)],
-          const SizedBox(height: 8),
-          OutlinedButton(onPressed: _cancelPhone, child: const Text('ยกเลิก')),
-        ],
+        const Text('เบอร์ที่ใช้เข้าสู่ระบบ', style: TextStyle(fontSize: 14, color: stone600)),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(12),

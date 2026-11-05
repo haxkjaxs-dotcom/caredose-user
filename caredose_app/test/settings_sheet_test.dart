@@ -1,3 +1,4 @@
+import 'package:caredose/state/auth_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,26 +29,45 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('phone change validates phone and OTP before saving', (tester) async {
-    final s = await pumpApp(tester);
+  testWidgets('the verified phone is shown read-only (no mock number change)', (tester) async {
+    await pumpApp(tester);
     await openSettings(tester);
-    await tapVisible(tester, find.text('เปลี่ยนเบอร์และยืนยัน OTP'));
-    await tester.enterText(find.byKey(const ValueKey('new-phone')), '081');
-    await tapVisible(tester, find.text('ส่งรหัส OTP'));
-    expect(find.text('กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง'), findsOneWidget);
+    expect(find.text('เบอร์รับ SMS ที่ยืนยันแล้ว'), findsOneWidget);
+    expect(find.textContaining('เบอร์ที่ใช้เข้าสู่ระบบ'), findsOneWidget);
+    expect(find.text('เปลี่ยนเบอร์และยืนยัน OTP'), findsNothing);
+    await disposeApp(tester);
+  });
 
-    await tester.enterText(find.byKey(const ValueKey('new-phone')), '0899999999');
-    await tapVisible(tester, find.text('ส่งรหัส OTP'));
-    expect(find.text('ส่งรหัส OTP ไปยัง 0899999999 แล้ว'), findsOneWidget);
+  testWidgets('about text no longer claims there is no account', (tester) async {
+    await pumpApp(tester);
+    await openSettings(tester);
+    await tapVisible(tester, find.text('เกี่ยวกับแอป'));
+    expect(find.textContaining('ไม่มีระบบบัญชี'), findsNothing);
+    expect(find.textContaining('ข้อมูลส่วนตัวเก็บในระบบหลังเข้าสู่ระบบด้วยเบอร์โทร'), findsOneWidget);
+    await disposeApp(tester);
+  });
 
-    await tester.enterText(find.byKey(const ValueKey('otp')), '12');
-    await tapVisible(tester, find.text('ยืนยันและใช้เบอร์นี้'));
-    expect(find.text('กรุณากรอกรหัส OTP 6 หลัก'), findsOneWidget);
-    expect(s.data.verifiedPhone, '081-234-5678');
+  testWidgets('sign out asks first, then signs out and wipes local data', (tester) async {
+    final s = await pumpApp(tester);
+    s.setPatient('คนอื่น');
+    await tester.pumpAndSettle();
+    await openSettings(tester);
+    await tapVisible(tester, find.widgetWithText(OutlinedButton, 'ออกจากระบบ'));
+    expect(find.text('ออกจากระบบ? ข้อมูลยาและประวัติในเครื่องนี้จะถูกล้างด้วย'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const ValueKey('otp')), '123456');
-    await tapVisible(tester, find.text('ยืนยันและใช้เบอร์นี้'));
-    expect(s.data.verifiedPhone, '0899999999');
+    // cancelling changes nothing
+    await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('ยกเลิก')));
+    await tester.pumpAndSettle();
+    expect(lastAuth.status, AuthStatus.ready);
+    expect(s.data.patient, 'คนอื่น');
+
+    await tapVisible(tester, find.widgetWithText(OutlinedButton, 'ออกจากระบบ'));
+    await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('ออกจากระบบ')));
+    await tester.pumpAndSettle();
+    expect(lastAuthRepo.signOutCalls, 1);
+    expect(lastAuth.status, AuthStatus.loggedOut);
+    expect(s.data.patient, 'คุณแม่สมศรี');
+    expect(find.text('ส่งรหัส OTP'), findsOneWidget); // back at the login screen
     await disposeApp(tester);
   });
 
