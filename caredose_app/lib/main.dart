@@ -26,7 +26,7 @@ Future<void> main() async {
   final auth = AuthState(
     SupabaseAuthRepository(Supabase.instance.client),
     prefs,
-    // A fresh sign-in fills the local name/phone; signing out wipes local data.
+    // A fresh sign-in fills the local name/phone; signing out (or another person logging in) wipes local data.
     onSignedIn: (p, phone) {
       state.setPatient(p.nickname);
       state.setVerifiedPhone(displayPhone(phone));
@@ -34,7 +34,19 @@ Future<void> main() async {
     onSignedOut: () => state.resetAll(),
   );
   await auth.init();
-  // Show the UI first; a notification setup failure must never leave a blank app.
+
+  // Reminders (and the notification permission prompt) only exist while a user is signed in.
+  var notificationsStarted = false;
+  void syncReminders() {
+    final ready = auth.status == AuthStatus.ready;
+    state.setRemindersEnabled(ready);
+    if (ready && !notificationsStarted) {
+      notificationsStarted = true;
+      _startNotifications(service, state);
+    }
+  }
+
+  auth.addListener(syncReminders);
   runApp(MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: state),
@@ -43,7 +55,7 @@ Future<void> main() async {
     ],
     child: const LifecycleReloader(child: CareDoseApp()),
   ));
-  await _startNotifications(service, state);
+  syncReminders(); // after runApp so the UI shows before any permission dialog
 }
 
 Future<void> _startNotifications(NotificationService service, AppState state) async {
@@ -51,7 +63,7 @@ Future<void> _startNotifications(NotificationService service, AppState state) as
     await service.init(onAction: state.applyNotificationAction);
     await service.requestPermissions();
     await state.reload();
-    await service.reschedule(state.data, state.dismissed, DateTime.now());
+    await state.rescheduleNow();
   } catch (e) {
     debugPrint('notification setup failed: $e');
   }

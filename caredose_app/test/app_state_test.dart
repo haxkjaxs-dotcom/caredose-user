@@ -130,6 +130,32 @@ void main() {
     expect(sched.calls, 0);
   });
 
+  test('resetAll drops queued button presses so they cannot touch the sample data', () async {
+    final (s, _, storage) = await make();
+    await storage.appendPending('taken\tm1|2026-11-04|08:00\t2026-11-04T09:00:00.000');
+    await s.resetAll();
+    expect(storage.loadPending(), isEmpty);
+    expect(s.data.logs, isEmpty);
+    await s.flush();
+    expect(s.data.logs, isEmpty);
+  });
+
+  test('reminders can be switched off (signed out) and back on', () async {
+    final (s, sched, _) = await make();
+    s.setRemindersEnabled(false);
+    await s.flush();
+    expect(sched.last?.notify, false); // scheduler told to plan nothing
+    expect(s.data.notify, true); // the user's own setting is untouched
+    await s.rescheduleNow();
+    expect(sched.last?.notify, false);
+    s.setPatient('x');
+    await s.flush();
+    expect(sched.last?.notify, false);
+    s.setRemindersEnabled(true);
+    await s.flush();
+    expect(sched.last?.notify, true);
+  });
+
   test('tick refreshes now from the clock', () async {
     var t = DateTime(2026, 11, 4, 9);
     final (s, _, _) = await make(clock: () => t);

@@ -36,6 +36,6 @@ class Profile {
         'full_name': fullName,
         'age': age,
         'conditions': conditions,
-        'consent_at': consentAt.toIso8601String(),
+        'consent_at': consentAt.toUtc().toIso8601String(),
       };
 }

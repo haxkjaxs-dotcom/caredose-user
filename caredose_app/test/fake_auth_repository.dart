@@ -20,6 +20,9 @@ class FakeAuthRepository implements AuthRepository {
   String? phoneValue;
   Profile? stored;
   AuthFailure? failure;
+
+  /// Only [loadProfile] throws this (e.g. the network drops right after the code is accepted).
+  AuthFailure? loadFailure;
   Completer<void>? gate;
   int sendCalls = 0, verifyCalls = 0, saveCalls = 0, signOutCalls = 0, loadCalls = 0;
   Profile? lastSaved;
@@ -58,6 +61,8 @@ class FakeAuthRepository implements AuthRepository {
   @override
   Future<Profile?> loadProfile() async {
     loadCalls++;
+    final lf = loadFailure;
+    if (lf != null) throw lf;
     _maybeThrow();
     return stored;
   }

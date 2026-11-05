@@ -91,6 +91,58 @@ void main() {
     expect(events, isEmpty);
   });
 
+  test('a profile-load failure right after a good code does not strand the user', () async {
+    final repo = FakeAuthRepository(stored: sampleProfile)..loadFailure = const AuthFailure(AuthFailureKind.network);
+    final (s, _, _, _) = await make(repo: repo);
+    await s.init();
+    await s.verifyOtp('+66812345678', '123456'); // must not throw: the code is already used up
+    expect(repo.signedIn, true);
+    expect(s.status, AuthStatus.unavailable);
+    repo.loadFailure = null;
+    await s.init(); // the retry button
+    expect(s.status, AuthStatus.ready);
+  });
+
+  group('device owner', () {
+    const ownerKey = 'caredose_owner';
+
+    test('a different number signing in wipes the previous user\'s local data first', () async {
+      final (s, _, prefs, events) = await make(repo: FakeAuthRepository(stored: sampleProfile), prefs: {ownerKey: '+66899999999'});
+      await s.init();
+      await s.verifyOtp('+66812345678', '123456');
+      expect(events, ['out', 'in:สมศรี:+66812345678']);
+      expect(prefs.getString(ownerKey), '+66812345678');
+    });
+
+    test('a new user with no profile yet also wipes leftovers', () async {
+      final (s, _, _, events) = await make(prefs: {ownerKey: '+66899999999'});
+      await s.init();
+      await s.verifyOtp('+66812345678', '123456');
+      expect(events, ['out']);
+    });
+
+    test('the same number or a clean device does not wipe', () async {
+      final (s, _, prefs, events) = await make(repo: FakeAuthRepository(stored: sampleProfile), prefs: {ownerKey: '+66812345678'});
+      await s.init();
+      await s.verifyOtp('+66812345678', '123456');
+      expect(events, ['in:สมศรี:+66812345678']);
+
+      final (s2, _, prefs2, events2) = await make(repo: FakeAuthRepository(stored: sampleProfile));
+      await s2.init();
+      await s2.verifyOtp('+66812345678', '123456');
+      expect(events2, ['in:สมศรี:+66812345678']);
+      expect(prefs2.getString(ownerKey), '+66812345678');
+      expect(prefs.getString(ownerKey), '+66812345678');
+    });
+
+    test('sign out forgets the owner', () async {
+      final (s, _, prefs, _) = await make(repo: FakeAuthRepository(signedIn: true, stored: sampleProfile), prefs: {ownerKey: '+66812345678'});
+      await s.init();
+      await s.signOut();
+      expect(prefs.getString(ownerKey), isNull);
+    });
+  });
+
   test('wrong code throws and leaves the state unchanged', () async {
     final repo = FakeAuthRepository()..failure = const AuthFailure(AuthFailureKind.invalidCode);
     final (s, _, _, _) = await make(repo: repo);

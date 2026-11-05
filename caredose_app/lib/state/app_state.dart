@@ -32,6 +32,9 @@ class AppState extends ChangeNotifier {
   late DateTime now;
   Future<void> _last = Future.value();
 
+  /// False while signed out: nothing is scheduled, so the sample medicines never ring.
+  bool remindersEnabled = true;
+
   /// Completes when all pending saves and reschedules have finished.
   Future<void> flush() => _last;
 
@@ -47,7 +50,7 @@ class AppState extends ChangeNotifier {
       if (await _drainPending()) notifyListeners();
       await _storage.save(data);
       await _storage.saveDismissed(dismissed);
-      await _scheduler.reschedule(data, dismissed, _clock());
+      await _scheduler.reschedule(remindersEnabled ? data : data.copyWith(notify: false), dismissed, _clock());
     }).catchError((Object e) {
       debugPrint('persist/reschedule failed: $e');
     });
@@ -67,6 +70,18 @@ class AppState extends ChangeNotifier {
     }
     await _storage.removePending(entries.length);
     return true;
+  }
+
+  void setRemindersEnabled(bool v) {
+    if (v == remindersEnabled) return;
+    remindersEnabled = v;
+    _persist();
+  }
+
+  /// Re-plans notifications now (respecting [remindersEnabled]).
+  Future<void> rescheduleNow() {
+    _persist();
+    return flush();
   }
 
   void tick() {
@@ -158,6 +173,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> resetAll() async {
     dismissed = <String>{};
+    await _storage.clearPending(); // queued presses belong to the data being wiped
     _commit(AppData.seed(_clock()));
     await flush();
   }

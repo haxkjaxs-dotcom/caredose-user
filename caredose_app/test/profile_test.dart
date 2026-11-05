@@ -17,6 +17,19 @@ void main() {
     expect(Profile.fromJson(j).toJson(), j);
   });
 
+  test('consent time is stored in UTC even when created from a local time', () {
+    final local = Profile(
+      nickname: 'ก',
+      fullName: 'ก ข',
+      age: 30,
+      conditions: const [],
+      consentAt: DateTime(2026, 11, 5, 10, 0), // local wall-clock time
+    );
+    final iso = local.toJson()['consent_at'] as String;
+    expect(iso.endsWith('Z'), true);
+    expect(DateTime.parse(iso).isAtSameMomentAs(local.consentAt), true);
+  });
+
   test('fromJson throws FormatException on missing or wrongly typed fields', () {
     expect(() => Profile.fromJson({}), throwsFormatException);
     expect(() => Profile.fromJson({...p.toJson(), 'age': 'x'}), throwsFormatException);

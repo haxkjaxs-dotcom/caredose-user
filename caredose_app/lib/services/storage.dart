@@ -47,6 +47,8 @@ class Storage {
     await _p.setStringList(_pendingKey, loadPending().skip(count).toList());
   }
 
+  Future<void> clearPending() => _p.remove(_pendingKey);
+
   Set<String> loadDismissed() => (_p.getStringList(_dismissedKey) ?? const <String>[]).toSet();
 
   Future<void> saveDismissed(Set<String> s) => _p.setStringList(_dismissedKey, s.toList());

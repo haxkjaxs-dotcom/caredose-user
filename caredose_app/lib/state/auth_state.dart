@@ -12,6 +12,7 @@ class AuthState extends ChangeNotifier {
   AuthState(this._repo, this._prefs, {this.onSignedIn, this.onSignedOut});
 
   static const _cacheKey = 'caredose_profile';
+  static const _ownerKey = 'caredose_owner'; // phone whose data lives on this device
 
   final AuthRepository _repo;
   final SharedPreferences _prefs;
@@ -66,7 +67,22 @@ class AuthState extends ChangeNotifier {
 
   Future<void> verifyOtp(String e164, String code) async {
     await _repo.verifyOtp(e164, code);
-    final p = await _repo.loadProfile();
+    final phone = _repo.phone ?? e164;
+    final owner = _prefs.getString(_ownerKey);
+    if (owner != null && owner != phone) {
+      // Another person's data is still on this device (their session ended without a sign-out).
+      await _prefs.remove(_cacheKey);
+      onSignedOut?.call();
+    }
+    await _prefs.setString(_ownerKey, phone);
+    final Profile? p;
+    try {
+      p = await _repo.loadProfile();
+    } on AuthFailure {
+      // The code is already used up; the session exists. Offer a retry instead of a dead end.
+      _set(AuthStatus.unavailable);
+      return;
+    }
     if (p == null) {
       _set(AuthStatus.needsProfile);
     } else {
@@ -91,6 +107,7 @@ class AuthState extends ChangeNotifier {
       debugPrint('sign out failed on the backend: $e');
     }
     await _prefs.remove(_cacheKey);
+    await _prefs.remove(_ownerKey);
     _set(AuthStatus.loggedOut);
     onSignedOut?.call();
   }
