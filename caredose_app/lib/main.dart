@@ -36,7 +36,7 @@ Future<void> main() async {
     onSignedOut: () => state.resetAll(),
   );
   await auth.init();
-  final medSync = MedSync(SupabaseMedRepository(Supabase.instance.client), state);
+  final medSync = MedSync(SupabaseMedRepository(Supabase.instance.client), state, canPull: () => auth.status == AuthStatus.ready);
 
   // Reminders (and the notification permission prompt) only exist while a user is signed in.
   var notificationsStarted = false;

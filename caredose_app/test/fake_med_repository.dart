@@ -9,6 +9,10 @@ class FakeMedRepository implements MedRepository {
   List<RemoteLog> logs = [];
   AuthFailure? failure;
 
+  /// Any non-AuthFailure error to throw from fetchPlans.
+  Object? crash;
+  final order = <String>[];
+
   /// When set, fetchPlans waits for it (to hold a pull open).
   Completer<void>? gate;
   int plansCalls = 0, logsCalls = 0;
@@ -18,8 +22,10 @@ class FakeMedRepository implements MedRepository {
   @override
   Future<List<RemotePlan>> fetchPlans() async {
     plansCalls++;
+    order.add('fetchPlans');
     if (gate != null) await gate!.future;
     if (failure != null) throw failure!;
+    if (crash != null) throw crash!;
     return plans;
   }
 

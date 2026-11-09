@@ -265,9 +265,14 @@ void applyRemoteTests() {
       ]);
       await s.flush();
       expect(s.data.logs['p1|2026-11-03|08:00']?.status, 'taken');
-      expect(s.data.logs['p1|2026-11-03|08:00']?.at, DateTime.utc(2026, 11, 3, 1, 10).toIso8601String());
+      // stored as a local timestamp (no 'Z'), like logs written by the app itself
+      final takenAt = DateTime.parse(s.data.logs['p1|2026-11-03|08:00']!.at);
+      expect(takenAt.isUtc, false);
+      expect(takenAt, DateTime.utc(2026, 11, 3, 1, 10).toLocal());
+      expect(takenAt.hour, DateTime.utc(2026, 11, 3, 1, 10).toLocal().hour);
       expect(s.data.logs['p1|2026-11-02|08:00']?.status, 'skipped');
-      expect(s.data.logs['p1|2026-11-02|08:00']?.at, DateTime(2026, 11, 2, 8).toUtc().toIso8601String());
+      expect(DateTime.parse(s.data.logs['p1|2026-11-02|08:00']!.at), DateTime(2026, 11, 2, 8));
+      expect(s.data.logs['p1|2026-11-02|08:00']!.at.endsWith('Z'), false);
       expect(s.data.logs.keys.where((k) => k.contains('2026-11-01') || k.contains('2026-10-31')), isEmpty);
       // overwrite a different local value, keep logs of a plan the server dropped
       s.applyRemote(plans: const [], logs: [

@@ -156,7 +156,7 @@ class AppState extends ChangeNotifier {
       if (l.status != 'taken' && l.status != 'skipped') continue; // pending/missed carry no information
       final t = l.scheduledAt.toLocal();
       final hh = t.hour.toString().padLeft(2, '0'), mm = t.minute.toString().padLeft(2, '0');
-      merged['${l.planId}|${dateKey(t)}|$hh:$mm'] = DoseLog(l.status, (l.takenAt ?? l.scheduledAt).toIso8601String());
+      merged['${l.planId}|${dateKey(t)}|$hh:$mm'] = DoseLog(l.status, (l.takenAt ?? l.scheduledAt).toLocal().toIso8601String());
     }
     final next = data.copyWith(meds: [for (final p in plans) p.toMed()], scheduleIds: scheduleIds, logs: merged);
     String sig(AppData d) => jsonEncode([d.meds.map((m) => m.toJson()).toList(), d.scheduleIds, d.logs.map((k, v) => MapEntry(k, v.toJson()))]);
