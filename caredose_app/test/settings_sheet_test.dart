@@ -89,13 +89,13 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('clear data asks for confirmation and restores the sample data', (tester) async {
+  testWidgets('clear data asks for confirmation and restores the empty defaults', (tester) async {
     final s = await pumpApp(tester);
     s.setPatient('คนอื่น');
     await tester.pumpAndSettle();
     await openSettings(tester);
     await tapVisible(tester, find.text('จัดการข้อมูลในเครื่อง: ล้างข้อมูล'));
-    expect(find.text('ลบข้อมูลทั้งหมดในเครื่อง และเริ่มใหม่ด้วยข้อมูลตัวอย่าง?'), findsOneWidget);
+    expect(find.text('ลบข้อมูลทั้งหมดในเครื่อง และเริ่มใหม่?'), findsOneWidget);
     await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('ลบ')));
     await tester.pumpAndSettle();
     expect(s.data.patient, '');

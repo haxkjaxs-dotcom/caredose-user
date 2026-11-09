@@ -64,7 +64,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        content: const Text('ลบข้อมูลทั้งหมดในเครื่อง และเริ่มใหม่ด้วยข้อมูลตัวอย่าง?'),
+        content: const Text('ลบข้อมูลทั้งหมดในเครื่อง และเริ่มใหม่?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('ยกเลิก')),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('ลบ')),
