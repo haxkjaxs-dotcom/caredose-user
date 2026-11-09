@@ -211,6 +211,91 @@ void main() {
       expect(s.status, AuthStatus.unavailable);
     });
 
+    test('a retry that finishes after sign out does not bring the session back', () async {
+      final repo = FakeAuthRepository(signedIn: true, stored: sampleProfile)..claimResult = null;
+      final (s, _, prefs, events) = await make(repo: repo);
+      await s.init();
+      repo.claimResult = 'patient-1';
+      repo.claimGate = Completer<void>();
+      final retry = s.retry();
+      await s.signOut();
+      repo.claimGate!.complete();
+      await retry;
+      expect(s.status, AuthStatus.loggedOut);
+      expect(prefs.getString(cacheKey), isNull);
+      expect(events, ['out']); // no 'in:'
+    });
+
+    test('a stale failure after sign out does not show unavailable', () async {
+      final repo = FakeAuthRepository(signedIn: true)..claimResult = null;
+      final (s, _, _, _) = await make(repo: repo);
+      await s.init();
+      repo.claimFailure = const AuthFailure(AuthFailureKind.network);
+      repo.claimGate = Completer<void>();
+      final retry = s.retry();
+      await s.signOut();
+      repo.claimGate!.complete();
+      await retry;
+      expect(s.status, AuthStatus.loggedOut);
+    });
+
+    test('rejected account is notRegistered even with a cached profile (claim)', () async {
+      final cached = {cacheKey: '{"nickname":"แคช","full_name":"แคช ทดสอบ","age":40,"conditions":["โรคไต"],"consent_at":"2026-11-05T00:00:00.000Z"}'};
+      final repo = FakeAuthRepository(signedIn: true)..claimFailure = const AuthFailure(AuthFailureKind.rejected);
+      final (s, _, prefs, _) = await make(repo: repo, prefs: cached);
+      await s.init();
+      expect(s.status, AuthStatus.notRegistered);
+      expect(s.notice, 'ระบบไม่อนุญาตการทำรายการนี้');
+      expect(prefs.getString(cacheKey), isNotNull); // not wiped
+    });
+
+    test('rejected account is notRegistered when loadProfile is rejected', () async {
+      final cached = {cacheKey: '{"nickname":"แคช","full_name":"แคช ทดสอบ","age":40,"conditions":["โรคไต"],"consent_at":"2026-11-05T00:00:00.000Z"}'};
+      final repo = FakeAuthRepository(signedIn: true)..loadFailure = const AuthFailure(AuthFailureKind.rejected);
+      final (s, _, _, _) = await make(repo: repo, prefs: cached);
+      await s.init();
+      expect(s.status, AuthStatus.notRegistered);
+    });
+
+    test('onSignedIn still fires when a fresh login recovers through the unavailable retry (init)', () async {
+      final repo = FakeAuthRepository(stored: sampleProfile)..claimFailure = const AuthFailure(AuthFailureKind.network);
+      final (s, _, _, events) = await make(repo: repo);
+      await s.init();
+      await s.verifyOtp('+66812345678', '123456');
+      expect(s.status, AuthStatus.unavailable);
+      repo.claimFailure = null;
+      await s.init();
+      expect(s.status, AuthStatus.ready);
+      expect(events, ['in:สมศรี:+66812345678']);
+      await s.init(); // a later restore does not fire again
+      expect(events, hasLength(1));
+    });
+
+    test('notRegistered -> retry fails offline -> init retry still fires onSignedIn', () async {
+      final repo = FakeAuthRepository(signedIn: true, stored: sampleProfile)..claimResult = null;
+      final (s, _, _, events) = await make(repo: repo);
+      await s.init();
+      repo.claimFailure = const AuthFailure(AuthFailureKind.network);
+      await s.retry();
+      expect(s.status, AuthStatus.unavailable);
+      repo.claimFailure = null;
+      repo.claimResult = 'patient-1';
+      await s.init();
+      expect(s.status, AuthStatus.ready);
+      expect(events, ['in:สมศรี:+66812345678']);
+    });
+
+    test('a restored session never fires onSignedIn, even after an offline retry', () async {
+      final repo = FakeAuthRepository(signedIn: true, stored: sampleProfile)..claimFailure = const AuthFailure(AuthFailureKind.network);
+      final (s, _, _, events) = await make(repo: repo);
+      await s.init();
+      expect(s.status, AuthStatus.unavailable);
+      repo.claimFailure = null;
+      await s.init();
+      expect(s.status, AuthStatus.ready);
+      expect(events, isEmpty);
+    });
+
     test('signOut from notRegistered works and clears the notice', () async {
       final repo = FakeAuthRepository(signedIn: true)..claimFailure = const AuthFailure(AuthFailureKind.duplicatePhone);
       final (s, _, _, events) = await make(repo: repo);

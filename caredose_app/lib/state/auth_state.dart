@@ -52,30 +52,49 @@ class AuthState extends ChangeNotifier {
       _set(AuthStatus.loggedOut);
       return;
     }
-    await _resolve(fresh: false);
+    await _resolve();
   }
 
-  /// Claims the patient row by phone, then loads the profile. [fresh] = just signed in (fires [onSignedIn]).
-  Future<void> _resolve({required bool fresh}) async {
+  /// Bumped by [signOut]; a [_resolve] started before it must not touch state afterwards.
+  int _epoch = 0;
+
+  /// Set by a fresh sign-in (OTP verified / retry) and kept until a resolve ends in a real answer,
+  /// so [onSignedIn] still fires if the first attempt failed and was retried through [init].
+  bool _pendingSignIn = false;
+
+  /// Claims the patient row by phone, then loads the profile.
+  Future<void> _resolve() async {
+    final epoch = _epoch;
     notice = null;
     try {
-      if (await _repo.claimPatient() == null) {
+      final id = await _repo.claimPatient();
+      if (epoch != _epoch) return;
+      if (id == null) {
+        _pendingSignIn = false;
         _set(AuthStatus.notRegistered);
         return;
       }
       final p = await _repo.loadProfile();
+      if (epoch != _epoch) return;
       if (p == null) {
+        _pendingSignIn = false;
         _set(AuthStatus.needsProfile);
         return;
       }
       await _writeCache(p);
+      if (epoch != _epoch) return;
+      final fire = _pendingSignIn;
+      _pendingSignIn = false;
       _set(AuthStatus.ready, p: p);
-      if (fresh) onSignedIn?.call(p, _repo.phone ?? '');
+      if (fire) onSignedIn?.call(p, _repo.phone ?? '');
     } on AuthFailure catch (f) {
-      if (f.kind == AuthFailureKind.duplicatePhone) {
+      if (epoch != _epoch) return;
+      if (f.kind == AuthFailureKind.duplicatePhone || f.kind == AuthFailureKind.rejected) {
+        // A definitive server answer, not an outage: never fall back to the cache.
+        _pendingSignIn = false;
         notice = f.message;
         _set(AuthStatus.notRegistered);
-      } else if (fresh) {
+      } else if (_pendingSignIn) {
         // The code is already used up; the session exists. Offer a retry instead of a dead end.
         _set(AuthStatus.unavailable);
       } else {
@@ -92,7 +111,8 @@ class AuthState extends ChangeNotifier {
     if (_retrying) return;
     _retrying = true;
     try {
-      await _resolve(fresh: true);
+      _pendingSignIn = true;
+      await _resolve();
     } finally {
       _retrying = false;
     }
@@ -110,7 +130,8 @@ class AuthState extends ChangeNotifier {
       onSignedOut?.call();
     }
     await _prefs.setString(_ownerKey, phone);
-    await _resolve(fresh: true);
+    _pendingSignIn = true;
+    await _resolve();
   }
 
   Future<void> saveProfile(Profile p) async {
@@ -122,6 +143,8 @@ class AuthState extends ChangeNotifier {
 
   /// Always ends logged out and clears local data, even if the backend call fails.
   Future<void> signOut() async {
+    _epoch++;
+    _pendingSignIn = false;
     try {
       await _repo.signOut();
     } catch (e) {
