@@ -66,7 +66,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(lastAuthRepo.signOutCalls, 1);
     expect(lastAuth.status, AuthStatus.loggedOut);
-    expect(s.data.patient, 'คุณแม่สมศรี');
+    expect(s.data.patient, '');
     expect(find.text('ส่งรหัส OTP'), findsOneWidget); // back at the login screen
     await disposeApp(tester);
   });
@@ -98,7 +98,7 @@ void main() {
     expect(find.text('ลบข้อมูลทั้งหมดในเครื่อง และเริ่มใหม่ด้วยข้อมูลตัวอย่าง?'), findsOneWidget);
     await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('ลบ')));
     await tester.pumpAndSettle();
-    expect(s.data.patient, 'คุณแม่สมศรี');
+    expect(s.data.patient, '');
     await disposeApp(tester);
   });
 }

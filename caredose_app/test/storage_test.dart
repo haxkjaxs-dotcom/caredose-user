@@ -30,7 +30,8 @@ void main() {
     final s = await make({'caredose': '{"patient":"ก"}'});
     final d = s.load(now);
     expect(d.patient, 'ก');
-    expect(d.meds.length, 3);
+    expect(d.size, 'normal');
+    expect(d.repeatReminder, true);
   });
 
   test('save then load returns same data', () async {

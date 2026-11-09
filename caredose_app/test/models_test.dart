@@ -1,5 +1,6 @@
 import 'package:caredose/models/models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'helpers.dart';
 
 void main() {
   final now = DateTime(2026, 11, 4, 10, 0);
@@ -10,15 +11,30 @@ void main() {
     expect(b.toJson(), a.toJson());
   });
 
-  test('seed matches web sample data', () {
+  test('seed is empty defaults', () {
     final d = AppData.seed(now);
-    expect(d.patient, 'คุณแม่สมศรี');
+    expect(d.patient, '');
+    expect(d.size, 'normal');
+    expect(d.notify, true);
+    expect(d.notifyChannel, 'app');
+    expect(d.repeatReminder, true);
+    expect(d.verifiedPhone, '');
+    expect([d.meds, d.doctors, d.relatives, d.appts, d.bmis], everyElement(isEmpty));
+    expect(d.logs, isEmpty);
+    expect(d.scheduleIds, isEmpty);
+  });
+
+  test('scheduleIds round-trip through JSON and survive copyWith', () {
+    final d = AppData.seed(now).copyWith(scheduleIds: {'p1|08:00': 's1'});
+    expect(AppData.fromJson(d.toJson()).scheduleIds, {'p1|08:00': 's1'});
+    expect(d.copyWith(patient: 'x').scheduleIds, {'p1|08:00': 's1'});
+    expect(AppData.fromJson({'scheduleIds': {'a': 1, 'b': 'c'}}).scheduleIds, {'b': 'c'});
+  });
+
+  test('sample fixture matches the old web sample data', () {
+    final d = sampleData(now);
     expect(d.meds.map((m) => m.id), ['m1', 'm2', 'm3']);
     expect(d.meds[1].times, ['08:00', '18:00']);
-    expect(d.meds[0].start, '2026-11-04');
-    expect(d.appts.single.at, '2026-11-09T09:30');
-    expect(d.verifiedPhone, '081-234-5678');
-    expect(d.repeatReminder, true);
   });
 
   test('med missing times and wrong types do not throw', () {

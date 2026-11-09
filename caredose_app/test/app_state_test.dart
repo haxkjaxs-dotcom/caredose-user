@@ -1,9 +1,13 @@
+import 'dart:convert';
+
 import 'package:caredose/logic/dose_items.dart';
 import 'package:caredose/models/models.dart';
 import 'package:caredose/services/storage.dart';
 import 'package:caredose/state/app_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'helpers.dart' show sampleData;
 
 class FakeScheduler implements NotificationScheduler {
   int calls = 0;
@@ -20,7 +24,7 @@ class FakeScheduler implements NotificationScheduler {
 const date = '2026-11-04';
 
 Future<(AppState, FakeScheduler, Storage)> make({DateTime Function()? clock}) async {
-  SharedPreferences.setMockInitialValues({});
+  SharedPreferences.setMockInitialValues({'caredose': jsonEncode(sampleData(DateTime(2026, 11, 4, 9)).toJson())});
   final storage = Storage(await SharedPreferences.getInstance());
   final sched = FakeScheduler();
   final s = AppState(storage, sched, clock: clock ?? () => DateTime(2026, 11, 4, 9));

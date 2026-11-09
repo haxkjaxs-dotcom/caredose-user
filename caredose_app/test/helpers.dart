@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:caredose/app.dart';
 import 'package:caredose/logic/auth_validators.dart';
+import 'package:caredose/logic/thai_date.dart';
 import 'package:caredose/models/models.dart';
 import 'package:caredose/services/storage.dart';
 import 'package:caredose/state/app_state.dart';
@@ -33,11 +36,42 @@ class FakePermissions implements NotificationPermissions {
 
 final testNow = DateTime(2026, 11, 4, 9);
 
+/// The sample data production `AppData.seed` used to contain (3 meds, doctor, relative, appointment).
+AppData sampleData(DateTime now) {
+  final today = dateKey(now);
+  return AppData(
+    patient: 'คุณแม่สมศรี',
+    size: 'normal',
+    notify: true,
+    notifyChannel: 'app',
+    repeatReminder: true,
+    verifiedPhone: '081-234-5678',
+    meds: [
+      Med(id: 'm1', name: 'ยาลดความดัน', dosage: '1 เม็ด', meal: 'หลังอาหาร', times: const ['08:00'], start: today, note: 'ทานพร้อมน้ำเปล่า', color: medColors[0]),
+      Med(id: 'm2', name: 'ยาเบาหวาน', dosage: '1 เม็ด', meal: 'ก่อนอาหาร', times: const ['08:00', '18:00'], start: today, color: medColors[1]),
+      Med(id: 'm3', name: 'แคลเซียม', dosage: '2 เม็ด', meal: 'หลังอาหาร', times: const ['12:30', '21:00'], start: today, color: medColors[2]),
+    ],
+    doctors: const [Doctor(id: 'd1', name: 'นพ.วิชัย ใจดี', spec: 'อายุรกรรม / โรคความดัน', phone: '021234567')],
+    relatives: const [Relative(id: 'r1', name: 'สมชาย', rel: 'ลูกชาย', phone: '0812345678')],
+    appts: [
+      Appt(
+        id: 'a1',
+        at: '${dateKey(now.add(const Duration(days: 5)))}T09:30',
+        place: 'โรงพยาบาลศิริราช',
+        dept: 'อายุรกรรม',
+        note: 'งดน้ำและอาหารก่อนตรวจ 8 ชั่วโมง',
+        status: 'confirmed',
+      ),
+    ],
+  );
+}
+
 /// Scheduler of the most recent [makeState] call, for asserting reschedules.
 late FakeScheduler lastScheduler;
 
 Future<AppState> makeState({Map<String, Object> prefs = const {}}) async {
-  SharedPreferences.setMockInitialValues(prefs);
+  // Starts from the sample data unless the test supplies its own saved data.
+  SharedPreferences.setMockInitialValues({'caredose': jsonEncode(sampleData(testNow).toJson()), ...prefs});
   lastScheduler = FakeScheduler();
   return AppState(Storage(await SharedPreferences.getInstance()), lastScheduler, clock: () => testNow);
 }

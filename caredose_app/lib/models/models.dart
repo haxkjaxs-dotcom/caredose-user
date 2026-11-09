@@ -137,6 +137,8 @@ class AppData {
   final List<Appt> appts;
   final List<BmiRecord> bmis;
   final bool notify, repeatReminder;
+  /// `planId|HH:mm` -> medication_schedules.id, to address server logs from a dose key.
+  final Map<String, String> scheduleIds;
 
   const AppData({
     this.patient = '',
@@ -151,36 +153,11 @@ class AppData {
     this.notifyChannel = 'app',
     this.repeatReminder = true,
     this.verifiedPhone = '',
+    this.scheduleIds = const {},
   });
 
-  factory AppData.seed(DateTime now) {
-    final today = dateKey(now);
-    return AppData(
-      patient: 'คุณแม่สมศรี',
-      size: 'normal',
-      notify: true,
-      notifyChannel: 'app',
-      repeatReminder: true,
-      verifiedPhone: '081-234-5678',
-      meds: [
-        Med(id: 'm1', name: 'ยาลดความดัน', dosage: '1 เม็ด', meal: 'หลังอาหาร', times: const ['08:00'], start: today, note: 'ทานพร้อมน้ำเปล่า', color: medColors[0]),
-        Med(id: 'm2', name: 'ยาเบาหวาน', dosage: '1 เม็ด', meal: 'ก่อนอาหาร', times: const ['08:00', '18:00'], start: today, color: medColors[1]),
-        Med(id: 'm3', name: 'แคลเซียม', dosage: '2 เม็ด', meal: 'หลังอาหาร', times: const ['12:30', '21:00'], start: today, color: medColors[2]),
-      ],
-      doctors: const [Doctor(id: 'd1', name: 'นพ.วิชัย ใจดี', spec: 'อายุรกรรม / โรคความดัน', phone: '021234567')],
-      relatives: const [Relative(id: 'r1', name: 'สมชาย', rel: 'ลูกชาย', phone: '0812345678')],
-      appts: [
-        Appt(
-          id: 'a1',
-          at: '${dateKey(now.add(const Duration(days: 5)))}T09:30',
-          place: 'โรงพยาบาลศิริราช',
-          dept: 'อายุรกรรม',
-          note: 'งดน้ำและอาหารก่อนตรวจ 8 ชั่วโมง',
-          status: 'confirmed',
-        ),
-      ],
-    );
-  }
+  /// Defaults only: plans, doctors and appointments come from the server or the user.
+  factory AppData.seed(DateTime now) => const AppData();
 
   factory AppData.fromJson(Json j) {
     final logs = <String, DoseLog>{};
@@ -202,6 +179,9 @@ class AppData {
       notifyChannel: _str(j['notifyChannel'], 'app'),
       repeatReminder: _bool(j['repeatReminder'], true),
       verifiedPhone: _str(j['verifiedPhone']),
+      scheduleIds: j['scheduleIds'] is Map
+          ? {for (final e in (j['scheduleIds'] as Map).entries) if (e.key is String && e.value is String) e.key as String: e.value as String}
+          : const {},
     );
   }
 
@@ -218,6 +198,7 @@ class AppData {
         'notifyChannel': notifyChannel,
         'repeatReminder': repeatReminder,
         'verifiedPhone': verifiedPhone,
+        'scheduleIds': scheduleIds,
       };
 
   AppData copyWith({
@@ -233,6 +214,7 @@ class AppData {
     String? notifyChannel,
     bool? repeatReminder,
     String? verifiedPhone,
+    Map<String, String>? scheduleIds,
   }) =>
       AppData(
         patient: patient ?? this.patient,
@@ -247,5 +229,6 @@ class AppData {
         notifyChannel: notifyChannel ?? this.notifyChannel,
         repeatReminder: repeatReminder ?? this.repeatReminder,
         verifiedPhone: verifiedPhone ?? this.verifiedPhone,
+        scheduleIds: scheduleIds ?? this.scheduleIds,
       );
 }
