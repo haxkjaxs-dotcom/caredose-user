@@ -1,10 +1,11 @@
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
+import 'services/med_sync.dart';
 import 'state/app_state.dart';
 
 /// Re-reads storage (notification buttons may have written to it) when the app
-/// returns to the foreground, and refreshes the clock.
+/// returns to the foreground, refreshes the clock and pulls the server's plans.
 class LifecycleReloader extends StatefulWidget {
   const LifecycleReloader({super.key, required this.child});
   final Widget child;
@@ -28,7 +29,9 @@ class _LifecycleReloaderState extends State<LifecycleReloader> with WidgetsBindi
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) context.read<AppState>().reload();
+    if (state != AppLifecycleState.resumed) return;
+    context.read<AppState>().reload();
+    context.read<MedSync>().pull();
   }
 
   @override

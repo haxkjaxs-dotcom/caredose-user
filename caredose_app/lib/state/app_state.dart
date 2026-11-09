@@ -1,8 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../logic/bmi.dart';
 import '../logic/dose_items.dart';
+import '../logic/thai_date.dart';
 import '../models/models.dart';
+import '../models/remote_plan.dart';
 import '../services/notification_actions.dart';
 import '../services/storage.dart';
 
@@ -34,6 +38,8 @@ class AppState extends ChangeNotifier {
 
   /// False while signed out: nothing is scheduled, so the sample medicines never ring.
   bool remindersEnabled = true;
+
+  DateTime get clockNow => _clock();
 
   /// Completes when all pending saves and reschedules have finished.
   Future<void> flush() => _last;
@@ -137,6 +143,25 @@ class AppState extends ChangeNotifier {
   void undoKeys(List<String> keys) {
     final logs = {...data.logs}..removeWhere((k, _) => keys.contains(k));
     _commit(data.copyWith(logs: logs));
+  }
+
+  /// Replaces the medicines with the server's plans and merges its taken/skipped logs.
+  /// Does nothing (no save, no reschedule, no notify) when nothing actually changed.
+  void applyRemote({required List<RemotePlan> plans, required List<RemoteLog> logs}) {
+    final scheduleIds = {
+      for (final p in plans) for (final s in p.schedules) '${p.id}|${s.time}': s.id,
+    };
+    final merged = {...data.logs};
+    for (final l in logs) {
+      if (l.status != 'taken' && l.status != 'skipped') continue; // pending/missed carry no information
+      final t = l.scheduledAt.toLocal();
+      final hh = t.hour.toString().padLeft(2, '0'), mm = t.minute.toString().padLeft(2, '0');
+      merged['${l.planId}|${dateKey(t)}|$hh:$mm'] = DoseLog(l.status, (l.takenAt ?? l.scheduledAt).toIso8601String());
+    }
+    final next = data.copyWith(meds: [for (final p in plans) p.toMed()], scheduleIds: scheduleIds, logs: merged);
+    String sig(AppData d) => jsonEncode([d.meds.map((m) => m.toJson()).toList(), d.scheduleIds, d.logs.map((k, v) => MapEntry(k, v.toJson()))]);
+    if (sig(next) == sig(data)) return;
+    _commit(next);
   }
 
   void saveMed(Med m) {

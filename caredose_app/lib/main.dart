@@ -7,8 +7,10 @@ import 'app.dart';
 import 'config.dart';
 import 'lifecycle_reloader.dart';
 import 'logic/auth_validators.dart';
+import 'services/med_sync.dart';
 import 'services/notification_service.dart';
 import 'services/storage.dart';
+import 'services/supabase_med_repository.dart';
 import 'services/supabase_auth_repository.dart';
 import 'state/app_state.dart';
 import 'state/auth_state.dart';
@@ -34,6 +36,7 @@ Future<void> main() async {
     onSignedOut: () => state.resetAll(),
   );
   await auth.init();
+  final medSync = MedSync(SupabaseMedRepository(Supabase.instance.client), state);
 
   // Reminders (and the notification permission prompt) only exist while a user is signed in.
   var notificationsStarted = false;
@@ -44,6 +47,12 @@ Future<void> main() async {
       notificationsStarted = true;
       _startNotifications(service, state);
     }
+    if (ready) {
+      medSync.pull();
+      medSync.start();
+    } else {
+      medSync.stop();
+    }
   }
 
   auth.addListener(syncReminders);
@@ -52,6 +61,7 @@ Future<void> main() async {
       ChangeNotifierProvider.value(value: state),
       ChangeNotifierProvider.value(value: auth),
       Provider<NotificationPermissions>.value(value: service),
+      Provider<MedSync>.value(value: medSync),
     ],
     child: const LifecycleReloader(child: CareDoseApp()),
   ));

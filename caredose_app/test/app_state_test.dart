@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:caredose/logic/dose_items.dart';
 import 'package:caredose/models/models.dart';
+import 'package:caredose/models/remote_plan.dart';
 import 'package:caredose/services/storage.dart';
 import 'package:caredose/state/app_state.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,6 +33,7 @@ Future<(AppState, FakeScheduler, Storage)> make({DateTime Function()? clock}) as
 }
 
 void main() {
+  applyRemoteTests();
   test('mark taken logs, persists and reschedules', () async {
     final (s, sched, storage) = await make();
     final it = itemsFor(s.data, date, s.now).first;
@@ -207,5 +209,75 @@ void main() {
     s.setPatient('x');
     await s.flush();
     expect(sched.lastNow, DateTime(2026, 11, 4, 9, 0, 30));
+  });
+}
+
+RemotePlan _plan(String id, {String time = '08:00', String sid = 's1', String name = 'ยาใหม่'}) => RemotePlan(
+      id: id,
+      name: name,
+      dosage: '1 เม็ด',
+      meal: 'หลังอาหาร',
+      start: '2026-11-01',
+      end: '',
+      note: '',
+      schedules: [PlanSchedule(sid, time)],
+    );
+
+void applyRemoteTests() {
+  group('applyRemote', () {
+    test('replaces meds, builds scheduleIds, reschedules once; same data again does nothing', () async {
+      final (s, sched, storage) = await make();
+      s.applyRemote(plans: [_plan('p1')], logs: const []);
+      await s.flush();
+      expect(s.data.meds.map((m) => m.id), ['p1']);
+      expect(s.data.meds.single.times, ['08:00']);
+      expect(s.data.scheduleIds, {'p1|08:00': 's1'});
+      expect(storage.load(s.now).meds.single.id, 'p1');
+      expect(sched.calls, 1);
+      var notified = 0;
+      s.addListener(() => notified++);
+      s.applyRemote(plans: [_plan('p1')], logs: const []);
+      await s.flush();
+      expect(sched.calls, 1);
+      expect(notified, 0);
+    });
+
+    test('a plan missing from the server disappears and the notifications are rebuilt', () async {
+      final (s, sched, _) = await make();
+      s.applyRemote(plans: [_plan('p1'), _plan('p2', sid: 's2')], logs: const []);
+      await s.flush();
+      s.applyRemote(plans: [_plan('p1')], logs: const []);
+      await s.flush();
+      expect(s.data.meds.map((m) => m.id), ['p1']);
+      expect(s.data.scheduleIds.keys, ['p1|08:00']);
+      expect(sched.calls, 2);
+    });
+
+    test('server logs are keyed by local date/time; taken/skipped win; pending/missed ignored; old logs of vanished plans stay', () async {
+      final (s, sched, _) = await make();
+      final local = DateTime(2026, 11, 3, 8);
+      s.applyRemote(plans: [_plan('p1')], logs: const []);
+      s.applyRemote(plans: [_plan('p1')], logs: [
+        RemoteLog(planId: 'p1', scheduleId: 's1', status: 'taken', scheduledAt: local.toUtc(), takenAt: DateTime.utc(2026, 11, 3, 1, 10)),
+        RemoteLog(planId: 'p1', scheduleId: 's1', status: 'skipped', scheduledAt: DateTime(2026, 11, 2, 8).toUtc()),
+        RemoteLog(planId: 'p1', scheduleId: 's1', status: 'pending', scheduledAt: DateTime(2026, 11, 1, 8).toUtc()),
+        RemoteLog(planId: 'p1', scheduleId: 's1', status: 'missed', scheduledAt: DateTime(2026, 10, 31, 8).toUtc()),
+      ]);
+      await s.flush();
+      expect(s.data.logs['p1|2026-11-03|08:00']?.status, 'taken');
+      expect(s.data.logs['p1|2026-11-03|08:00']?.at, DateTime.utc(2026, 11, 3, 1, 10).toIso8601String());
+      expect(s.data.logs['p1|2026-11-02|08:00']?.status, 'skipped');
+      expect(s.data.logs['p1|2026-11-02|08:00']?.at, DateTime(2026, 11, 2, 8).toUtc().toIso8601String());
+      expect(s.data.logs.keys.where((k) => k.contains('2026-11-01') || k.contains('2026-10-31')), isEmpty);
+      // overwrite a different local value, keep logs of a plan the server dropped
+      s.applyRemote(plans: const [], logs: [
+        RemoteLog(planId: 'p1', scheduleId: 's1', status: 'skipped', scheduledAt: local.toUtc()),
+      ]);
+      await s.flush();
+      expect(s.data.meds, isEmpty);
+      expect(s.data.logs['p1|2026-11-03|08:00']?.status, 'skipped');
+      expect(s.data.logs['p1|2026-11-02|08:00']?.status, 'skipped');
+      expect(sched.calls, greaterThan(0));
+    });
   });
 }
