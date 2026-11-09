@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:caredose/services/auth_repository.dart';
 import 'package:caredose/services/supabase_auth_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show AuthApiException, AuthRetryableFetchException;
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthApiException, AuthRetryableFetchException, PostgrestException;
 
 void main() {
   AuthFailureKind kind(Object e) => mapAuthError(e).kind;
@@ -31,7 +31,31 @@ void main() {
     expect(identical(mapAuthError(f), f), true);
   });
 
+  test('duplicate phone and rejected account from the database', () {
+    expect(kind(PostgrestException(message: 'เบอร์ซ้ำในระบบ', code: 'P0001')), AuthFailureKind.duplicatePhone);
+    expect(kind(PostgrestException(message: 'other', code: 'P0001')), AuthFailureKind.unknown);
+    expect(kind(PostgrestException(message: 'not allowed', code: '42501')), AuthFailureKind.rejected);
+  });
+
+  test('patients row to Profile', () {
+    final row = {
+      'nickname': 'สมศรี',
+      'full_name': 'สมศรี ใจดี',
+      'age': 65,
+      'conditions': 'เบาหวาน, ความดันโลหิตสูง',
+      'profile_completed_at': '2026-11-09T01:00:00+00:00',
+    };
+    final p = profileFromPatientRow(row)!;
+    expect(p.conditions, ['เบาหวาน', 'ความดันโลหิตสูง']);
+    expect(p.consentAt.toUtc(), DateTime.utc(2026, 11, 9, 1));
+    expect(profileFromPatientRow({...row, 'profile_completed_at': null}), isNull);
+    expect(profileFromPatientRow(null), isNull);
+    expect(profileFromPatientRow({...row, 'conditions': null})!.conditions, isEmpty);
+  });
+
   test('Thai messages', () {
+    expect(const AuthFailure(AuthFailureKind.duplicatePhone).message, 'เบอร์นี้ซ้ำในระบบ กรุณาติดต่อผู้ดูแล');
+    expect(const AuthFailure(AuthFailureKind.rejected).message, 'ระบบไม่อนุญาตการทำรายการนี้');
     expect(const AuthFailure(AuthFailureKind.invalidCode).message, 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ');
     expect(const AuthFailure(AuthFailureKind.rateLimited).message, 'ขอรหัสบ่อยเกินไป กรุณารอสักครู่');
     expect(const AuthFailure(AuthFailureKind.network).message, 'ไม่มีอินเทอร์เน็ต กรุณาลองใหม่');

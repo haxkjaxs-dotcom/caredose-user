@@ -24,7 +24,16 @@ class FakeAuthRepository implements AuthRepository {
   /// Only [loadProfile] throws this (e.g. the network drops right after the code is accepted).
   AuthFailure? loadFailure;
   Completer<void>? gate;
-  int sendCalls = 0, verifyCalls = 0, saveCalls = 0, signOutCalls = 0, loadCalls = 0;
+
+  /// What [claimPatient] returns (null = phone not registered by an admin yet).
+  String? claimResult = 'patient-1';
+
+  /// Only [claimPatient] throws this (e.g. duplicate phone).
+  AuthFailure? claimFailure;
+
+  /// When set, [claimPatient] waits for it (to test concurrent retries).
+  Completer<void>? claimGate;
+  int sendCalls = 0, verifyCalls = 0, saveCalls = 0, signOutCalls = 0, loadCalls = 0, claimCalls = 0;
   Profile? lastSaved;
 
   @override
@@ -56,6 +65,17 @@ class FakeAuthRepository implements AuthRepository {
     await _wait();
     _maybeThrow();
     signedIn = true;
+  }
+
+  @override
+  Future<String?> claimPatient() async {
+    claimCalls++;
+    final g = claimGate;
+    if (g != null) await g.future;
+    final cf = claimFailure;
+    if (cf != null) throw cf;
+    _maybeThrow();
+    return claimResult;
   }
 
   @override

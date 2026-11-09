@@ -79,6 +79,18 @@ void main() {
     await unmount(tester);
   });
 
+  testWidgets('not registered shows the screen; retry recovers once the admin added the number', (tester) async {
+    final repo = FakeAuthRepository(signedIn: true)..claimResult = null;
+    await pumpGate(tester, repo);
+    expect(find.text('ยังไม่พบเบอร์นี้ในระบบ กรุณาติดต่อผู้ดูแล'), findsOneWidget);
+    repo.claimResult = 'patient-1';
+    repo.stored = sampleProfile;
+    await tester.tap(find.text('ลองใหม่'));
+    await tester.pumpAndSettle();
+    expect(find.text('HOME'), findsOneWidget);
+    await unmount(tester);
+  });
+
   testWidgets('full first-time flow: phone -> OTP -> profile -> app', (tester) async {
     final h = await pumpGate(tester, FakeAuthRepository());
     await tester.enterText(find.byKey(const ValueKey('phone')), '081-234-5678');

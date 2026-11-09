@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:caredose/models/profile.dart';
 import 'package:caredose/services/auth_repository.dart';
 import 'package:caredose/state/auth_state.dart';
@@ -101,6 +103,123 @@ void main() {
     repo.loadFailure = null;
     await s.init(); // the retry button
     expect(s.status, AuthStatus.ready);
+  });
+
+  group('claim by phone', () {
+    test('claim null after verifyOtp is notRegistered and loads no profile', () async {
+      final repo = FakeAuthRepository(stored: sampleProfile)..claimResult = null;
+      final (s, _, _, events) = await make(repo: repo);
+      await s.init();
+      await s.verifyOtp('+66812345678', '123456');
+      expect(s.status, AuthStatus.notRegistered);
+      expect(repo.claimCalls, 1);
+      expect(repo.loadCalls, 0);
+      expect(repo.signedIn, true); // stays signed in so retry works
+      expect(events, isEmpty);
+    });
+
+    test('claim null on init is notRegistered', () async {
+      final (s, _, _, _) = await make(repo: FakeAuthRepository(signedIn: true)..claimResult = null);
+      await s.init();
+      expect(s.status, AuthStatus.notRegistered);
+    });
+
+    test('init claims before loading the profile', () async {
+      final repo = FakeAuthRepository(signedIn: true, stored: sampleProfile);
+      final (s, _, _, _) = await make(repo: repo);
+      await s.init();
+      expect(repo.claimCalls, 1);
+      expect(s.status, AuthStatus.ready);
+    });
+
+    test('retry after the admin adds the number: needsProfile, or ready with onSignedIn', () async {
+      final repo = FakeAuthRepository(signedIn: true)..claimResult = null;
+      final (s, _, _, events) = await make(repo: repo);
+      await s.init();
+      repo.claimResult = 'patient-1';
+      await s.retry();
+      expect(s.status, AuthStatus.needsProfile);
+      expect(events, isEmpty);
+
+      final repo2 = FakeAuthRepository(signedIn: true, stored: sampleProfile)..claimResult = null;
+      final (s2, _, prefs2, events2) = await make(repo: repo2);
+      await s2.init();
+      repo2.claimResult = 'patient-1';
+      await s2.retry();
+      expect(s2.status, AuthStatus.ready);
+      expect(prefs2.getString(cacheKey), isNotNull);
+      expect(events2, ['in:สมศรี:+66812345678']);
+    });
+
+    test('retry still not registered stays notRegistered', () async {
+      final repo = FakeAuthRepository(signedIn: true)..claimResult = null;
+      final (s, _, _, _) = await make(repo: repo);
+      await s.init();
+      await s.retry();
+      expect(s.status, AuthStatus.notRegistered);
+      expect(repo.claimCalls, 2);
+    });
+
+    test('a second retry while one is running is ignored', () async {
+      final repo = FakeAuthRepository(signedIn: true)..claimResult = null;
+      final (s, _, _, _) = await make(repo: repo);
+      await s.init();
+      repo.claimGate = Completer<void>();
+      final first = s.retry();
+      await s.retry();
+      expect(repo.claimCalls, 2); // init + the first retry only
+      repo.claimGate!.complete();
+      await first;
+      await s.retry(); // allowed again once the first finished
+      expect(repo.claimCalls, 3);
+    });
+
+    test('duplicate phone is notRegistered with the message as notice', () async {
+      final repo = FakeAuthRepository(signedIn: true)..claimFailure = const AuthFailure(AuthFailureKind.duplicatePhone);
+      final (s, _, _, _) = await make(repo: repo);
+      await s.init();
+      expect(s.status, AuthStatus.notRegistered);
+      expect(s.notice, 'เบอร์นี้ซ้ำในระบบ กรุณาติดต่อผู้ดูแล');
+      repo.claimFailure = null;
+      await s.retry();
+      expect(s.notice, isNull);
+      expect(s.status, AuthStatus.needsProfile);
+    });
+
+    test('duplicate phone right after verifyOtp does not throw', () async {
+      final repo = FakeAuthRepository()..claimFailure = const AuthFailure(AuthFailureKind.duplicatePhone);
+      final (s, _, _, _) = await make(repo: repo);
+      await s.init();
+      await s.verifyOtp('+66812345678', '123456');
+      expect(s.status, AuthStatus.notRegistered);
+    });
+
+    test('offline claim on init uses the cache', () async {
+      final cached = {cacheKey: '{"nickname":"แคช","full_name":"แคช ทดสอบ","age":40,"conditions":["โรคไต"],"consent_at":"2026-11-05T00:00:00.000Z"}'};
+      final repo = FakeAuthRepository(signedIn: true)..claimFailure = const AuthFailure(AuthFailureKind.network);
+      final (s, _, _, _) = await make(repo: repo, prefs: cached);
+      await s.init();
+      expect(s.status, AuthStatus.ready);
+      expect(s.profile?.nickname, 'แคช');
+    });
+
+    test('offline claim after verifyOtp is unavailable, not a throw', () async {
+      final repo = FakeAuthRepository()..claimFailure = const AuthFailure(AuthFailureKind.network);
+      final (s, _, _, _) = await make(repo: repo);
+      await s.init();
+      await s.verifyOtp('+66812345678', '123456');
+      expect(s.status, AuthStatus.unavailable);
+    });
+
+    test('signOut from notRegistered works and clears the notice', () async {
+      final repo = FakeAuthRepository(signedIn: true)..claimFailure = const AuthFailure(AuthFailureKind.duplicatePhone);
+      final (s, _, _, events) = await make(repo: repo);
+      await s.init();
+      await s.signOut();
+      expect(s.status, AuthStatus.loggedOut);
+      expect(s.notice, isNull);
+      expect(events, ['out']);
+    });
   });
 
   group('device owner', () {

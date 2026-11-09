@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/profile.dart';
 import '../services/auth_repository.dart';
 
-enum AuthStatus { loading, loggedOut, needsProfile, ready, unavailable }
+enum AuthStatus { loading, loggedOut, needsProfile, ready, unavailable, notRegistered }
 
 class AuthState extends ChangeNotifier {
   AuthState(this._repo, this._prefs, {this.onSignedIn, this.onSignedOut});
@@ -23,6 +23,9 @@ class AuthState extends ChangeNotifier {
 
   AuthStatus status = AuthStatus.loading;
   Profile? profile;
+
+  /// Extra message for the not-registered screen (e.g. duplicate phone); null = default text.
+  String? notice;
   String? get phoneE164 => _repo.phone;
 
   void _set(AuthStatus s, {Profile? p}) {
@@ -49,17 +52,49 @@ class AuthState extends ChangeNotifier {
       _set(AuthStatus.loggedOut);
       return;
     }
+    await _resolve(fresh: false);
+  }
+
+  /// Claims the patient row by phone, then loads the profile. [fresh] = just signed in (fires [onSignedIn]).
+  Future<void> _resolve({required bool fresh}) async {
+    notice = null;
     try {
+      if (await _repo.claimPatient() == null) {
+        _set(AuthStatus.notRegistered);
+        return;
+      }
       final p = await _repo.loadProfile();
       if (p == null) {
         _set(AuthStatus.needsProfile);
-      } else {
-        await _writeCache(p);
-        _set(AuthStatus.ready, p: p);
+        return;
       }
-    } on AuthFailure {
-      final cached = _readCache();
-      _set(cached == null ? AuthStatus.unavailable : AuthStatus.ready, p: cached);
+      await _writeCache(p);
+      _set(AuthStatus.ready, p: p);
+      if (fresh) onSignedIn?.call(p, _repo.phone ?? '');
+    } on AuthFailure catch (f) {
+      if (f.kind == AuthFailureKind.duplicatePhone) {
+        notice = f.message;
+        _set(AuthStatus.notRegistered);
+      } else if (fresh) {
+        // The code is already used up; the session exists. Offer a retry instead of a dead end.
+        _set(AuthStatus.unavailable);
+      } else {
+        final cached = _readCache();
+        _set(cached == null ? AuthStatus.unavailable : AuthStatus.ready, p: cached);
+      }
+    }
+  }
+
+  bool _retrying = false;
+
+  /// "Try again" on the not-registered screen (e.g. after an admin added the number). One at a time.
+  Future<void> retry() async {
+    if (_retrying) return;
+    _retrying = true;
+    try {
+      await _resolve(fresh: true);
+    } finally {
+      _retrying = false;
     }
   }
 
@@ -75,21 +110,7 @@ class AuthState extends ChangeNotifier {
       onSignedOut?.call();
     }
     await _prefs.setString(_ownerKey, phone);
-    final Profile? p;
-    try {
-      p = await _repo.loadProfile();
-    } on AuthFailure {
-      // The code is already used up; the session exists. Offer a retry instead of a dead end.
-      _set(AuthStatus.unavailable);
-      return;
-    }
-    if (p == null) {
-      _set(AuthStatus.needsProfile);
-    } else {
-      await _writeCache(p);
-      _set(AuthStatus.ready, p: p);
-      onSignedIn?.call(p, _repo.phone ?? e164);
-    }
+    await _resolve(fresh: true);
   }
 
   Future<void> saveProfile(Profile p) async {
@@ -108,6 +129,7 @@ class AuthState extends ChangeNotifier {
     }
     await _prefs.remove(_cacheKey);
     await _prefs.remove(_ownerKey);
+    notice = null;
     _set(AuthStatus.loggedOut);
     onSignedOut?.call();
   }

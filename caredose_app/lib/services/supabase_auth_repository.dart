@@ -22,7 +22,19 @@ AuthFailure mapAuthError(Object e) {
       return const AuthFailure(AuthFailureKind.invalidCode);
     }
   }
+  if (e is PostgrestException) {
+    if (e.code == 'P0001' && e.message.contains('เบอร์ซ้ำ')) return const AuthFailure(AuthFailureKind.duplicatePhone);
+    if (e.code == '42501') return const AuthFailure(AuthFailureKind.rejected);
+  }
   return const AuthFailure(AuthFailureKind.unknown);
+}
+
+/// A `patients` row as a [Profile]; null until the patient has completed onboarding.
+Profile? profileFromPatientRow(Map<String, dynamic>? row) {
+  final done = row?['profile_completed_at'];
+  if (row == null || done == null) return null;
+  final conditions = (row['conditions'] as String? ?? '').split(',').map((c) => c.trim()).where((c) => c.isNotEmpty).toList();
+  return Profile.fromJson({...row, 'conditions': conditions, 'consent_at': done});
 }
 
 class SupabaseAuthRepository implements AuthRepository {
@@ -55,21 +67,28 @@ class SupabaseAuthRepository implements AuthRepository {
       _guard(() => _c.auth.verifyOTP(phone: e164, token: code, type: OtpType.sms));
 
   @override
+  Future<String?> claimPatient() => _guard(() async => (await _c.rpc('claim_my_patient')) as String?);
+
+  @override
   Future<Profile?> loadProfile() => _guard(() async {
         final uid = _c.auth.currentUser?.id;
         if (uid == null) return null;
-        final row = await _c.from('profiles').select().eq('id', uid).maybeSingle();
-        return row == null ? null : Profile.fromJson(row);
+        final row = await _c
+            .from('patients')
+            .select('nickname, full_name, age, conditions, profile_completed_at')
+            .eq('user_id', uid)
+            .maybeSingle();
+        return profileFromPatientRow(row);
       });
 
   @override
   Future<void> saveProfile(Profile p) => _guard(() async {
-        final uid = _c.auth.currentUser?.id;
-        if (uid == null) throw const AuthFailure(AuthFailureKind.unknown);
-        await _c.from('profiles').upsert({
-          'id': uid,
-          ...p.toJson(),
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        await _c.rpc('save_my_profile', params: {
+          'p_nickname': p.nickname,
+          'p_full_name': p.fullName,
+          'p_age': p.age,
+          'p_conditions': p.conditions,
+          'p_consent_version': '2026-11',
         });
       });
 

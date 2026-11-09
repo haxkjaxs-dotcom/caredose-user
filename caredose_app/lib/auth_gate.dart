@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/login_screen.dart';
+import 'screens/not_registered_screen.dart';
 import 'screens/otp_screen.dart';
 import 'screens/profile_screen.dart';
 import 'state/auth_state.dart';
@@ -32,6 +33,8 @@ class AuthGate extends StatelessWidget {
         return _page(const _LoginFlow());
       case AuthStatus.needsProfile:
         return _page(const ProfileScreen());
+      case AuthStatus.notRegistered:
+        return _page(const NotRegisteredScreen());
       case AuthStatus.ready:
         return child;
     }

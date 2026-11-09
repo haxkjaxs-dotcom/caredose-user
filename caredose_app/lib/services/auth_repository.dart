@@ -1,6 +1,6 @@
 import '../models/profile.dart';
 
-enum AuthFailureKind { invalidCode, rateLimited, network, unknown }
+enum AuthFailureKind { invalidCode, rateLimited, network, duplicatePhone, rejected, unknown }
 
 /// The only error type [AuthRepository] methods throw.
 class AuthFailure implements Exception {
@@ -15,6 +15,10 @@ class AuthFailure implements Exception {
         return 'ขอรหัสบ่อยเกินไป กรุณารอสักครู่';
       case AuthFailureKind.network:
         return 'ไม่มีอินเทอร์เน็ต กรุณาลองใหม่';
+      case AuthFailureKind.duplicatePhone:
+        return 'เบอร์นี้ซ้ำในระบบ กรุณาติดต่อผู้ดูแล';
+      case AuthFailureKind.rejected:
+        return 'ระบบไม่อนุญาตการทำรายการนี้';
       case AuthFailureKind.unknown:
         return 'เกิดข้อผิดพลาด กรุณาลองใหม่';
     }
@@ -32,6 +36,10 @@ abstract class AuthRepository {
 
   Future<void> sendOtp(String e164);
   Future<void> verifyOtp(String e164, String code);
+
+  /// Links the signed-in account to the patient an admin registered with this phone.
+  /// Returns the patient id, or null when no such patient exists (yet).
+  Future<String?> claimPatient();
   Future<Profile?> loadProfile();
   Future<void> saveProfile(Profile p);
   Future<void> signOut();
