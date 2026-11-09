@@ -3,11 +3,14 @@ import 'dart:convert';
 import 'package:caredose/logic/dose_items.dart';
 import 'package:caredose/models/models.dart';
 import 'package:caredose/models/remote_plan.dart';
+import 'package:caredose/services/auth_repository.dart';
+import 'package:caredose/services/log_outbox.dart';
 import 'package:caredose/services/storage.dart';
 import 'package:caredose/state/app_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'fake_med_repository.dart';
 import 'helpers.dart' show sampleData;
 
 class FakeScheduler implements NotificationScheduler {
@@ -24,16 +27,17 @@ class FakeScheduler implements NotificationScheduler {
 
 const date = '2026-11-04';
 
-Future<(AppState, FakeScheduler, Storage)> make({DateTime Function()? clock}) async {
+Future<(AppState, FakeScheduler, Storage)> make({DateTime Function()? clock, LogOutbox? outbox}) async {
   SharedPreferences.setMockInitialValues({'caredose': jsonEncode(sampleData(DateTime(2026, 11, 4, 9)).toJson())});
   final storage = Storage(await SharedPreferences.getInstance());
   final sched = FakeScheduler();
-  final s = AppState(storage, sched, clock: clock ?? () => DateTime(2026, 11, 4, 9));
+  final s = AppState(storage, sched, clock: clock ?? () => DateTime(2026, 11, 4, 9), outbox: outbox);
   return (s, sched, storage);
 }
 
 void main() {
   applyRemoteTests();
+  outboxTests();
   test('mark taken logs, persists and reschedules', () async {
     final (s, sched, storage) = await make();
     final it = itemsFor(s.data, date, s.now).first;
@@ -283,6 +287,112 @@ void applyRemoteTests() {
       expect(s.data.logs['p1|2026-11-03|08:00']?.status, 'skipped');
       expect(s.data.logs['p1|2026-11-02|08:00']?.status, 'skipped');
       expect(sched.calls, greaterThan(0));
+    });
+  });
+}
+
+/// An outbox whose server is unreachable, so the queued ops stay visible to the test.
+Future<LogOutbox> _offlineOutbox() async {
+  final repo = FakeMedRepository()..onUpsert = (_) async => throw const AuthFailure(AuthFailureKind.network);
+  return LogOutbox(await SharedPreferences.getInstance(), repo);
+}
+
+const _ids = {'m1|08:00': 'sch-m1', 'm2|08:00': 'sch-m2a', 'm2|18:00': 'sch-m2b'};
+
+void outboxTests() {
+  group('outbox', () {
+    Future<(AppState, LogOutbox, Storage)> setUp({DateTime? at}) async {
+      SharedPreferences.setMockInitialValues({});
+      final outbox = await _offlineOutbox();
+      final (s, _, storage) = await make(clock: () => at ?? DateTime(2026, 11, 4, 9), outbox: outbox);
+      s.data = s.data.copyWith(scheduleIds: _ids);
+      return (s, outbox, storage);
+    }
+
+    test('mark taken builds the op: ids, UTC scheduledAt, takenAt = now, late only after 60 minutes', () async {
+      final (s, o, _) = await setUp(at: DateTime(2026, 11, 4, 9, 1));
+      s.mark(itemsFor(s.data, date, s.now).first, DoseStatus.taken); // m1 08:00, 61 minutes
+      final op = o.pending.single;
+      expect(op.planId, 'm1');
+      expect(op.scheduleId, 'sch-m1');
+      expect(op.status, 'taken');
+      expect(op.scheduledAt, DateTime(2026, 11, 4, 8));
+      expect(op.toJson()['scheduledAt'], DateTime(2026, 11, 4, 8).toUtc().toIso8601String());
+      expect(op.takenAt, DateTime(2026, 11, 4, 9, 1));
+      expect(op.isLate, true);
+    });
+
+    test('exactly 60 minutes and 30 minutes are not late', () async {
+      final (s, o, _) = await setUp(); // now 09:00, dose 08:00 = exactly 60
+      s.mark(itemsFor(s.data, date, s.now).first, DoseStatus.taken);
+      expect(o.pending.single.isLate, false);
+      final (s2, o2, _) = await setUp(at: DateTime(2026, 11, 4, 8, 30));
+      s2.mark(itemsFor(s2.data, date, s2.now).first, DoseStatus.taken);
+      expect(o2.pending.single.isLate, false);
+    });
+
+    test('mark skipped is skipped and never late', () async {
+      final (s, o, _) = await setUp(at: DateTime(2026, 11, 4, 12));
+      s.mark(itemsFor(s.data, date, s.now).first, DoseStatus.skipped);
+      expect(o.pending.single.status, 'skipped');
+      expect(o.pending.single.isLate, false);
+    });
+
+    test('markMeal enqueues each logged dose only', () async {
+      final (s, o, _) = await setUp();
+      final all = itemsFor(s.data, date, s.now);
+      final keys = s.markMeal(all.where((i) => i.time == '08:00' || i.time == '18:00').toList());
+      expect(keys.length, 2); // the 18:00 dose is not due
+      expect(o.pending.map((e) => e.scheduleId), ['sch-m1', 'sch-m2a']);
+    });
+
+    test('undo becomes a pending op with no takenAt, replacing the taken one', () async {
+      final (s, o, _) = await setUp();
+      final it = itemsFor(s.data, date, s.now).first;
+      s.mark(it, DoseStatus.taken);
+      s.undo(it);
+      final op = o.pending.single;
+      expect(op.status, 'pending');
+      expect(op.takenAt, isNull);
+      expect(op.isLate, false);
+    });
+
+    test('undoKeys enqueues pending for each key that had a log', () async {
+      final (s, o, _) = await setUp();
+      final keys = s.markMeal(itemsFor(s.data, date, s.now).where((i) => i.time == '08:00').toList());
+      s.undoKeys(keys);
+      expect(o.pending.map((e) => e.status), ['pending', 'pending']);
+    });
+
+    test('a dose without a scheduleId queues nothing and does not throw', () async {
+      final (s, o, _) = await setUp();
+      s.data = s.data.copyWith(scheduleIds: const {});
+      final it = itemsFor(s.data, date, s.now).first;
+      s.mark(it, DoseStatus.taken);
+      s.markMeal([it]);
+      s.undo(it);
+      await s.applyNotificationAction('taken', it.key);
+      expect(o.pendingCount, 0);
+    });
+
+    test('notification taken/skip enqueue, notyet does not', () async {
+      final (s, o, _) = await setUp();
+      await s.applyNotificationAction('notyet', 'm1|2026-11-04|08:00');
+      expect(o.pendingCount, 0);
+      await s.applyNotificationAction('taken', 'm1|2026-11-04|08:00');
+      await s.applyNotificationAction('skip', 'm2|2026-11-04|08:00');
+      expect(o.pending.map((e) => '${e.scheduleId}:${e.status}'), ['sch-m1:taken', 'sch-m2a:skipped']);
+    });
+
+    test('presses queued by the background isolate are enqueued with their press time', () async {
+      final (s, o, storage) = await setUp();
+      await storage.appendPending('taken\tm1|2026-11-04|08:00\t2026-11-04T08:20:00.000');
+      await storage.appendPending('notyet\tm2|2026-11-04|08:00\t2026-11-04T08:21:00.000');
+      await storage.appendPending('skip\tm2|2026-11-04|18:00\t2026-11-04T18:30:00.000');
+      await s.reload();
+      expect(o.pending.map((e) => '${e.scheduleId}:${e.status}'), ['sch-m1:taken', 'sch-m2b:skipped']);
+      expect(o.pending.first.takenAt, DateTime(2026, 11, 4, 8, 20));
+      expect(o.pending.first.isLate, false);
     });
   });
 }

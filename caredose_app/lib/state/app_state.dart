@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,7 @@ import '../logic/dose_items.dart';
 import '../logic/thai_date.dart';
 import '../models/models.dart';
 import '../models/remote_plan.dart';
+import '../services/log_outbox.dart';
 import '../services/notification_actions.dart';
 import '../services/storage.dart';
 
@@ -21,7 +23,7 @@ abstract class NotificationPermissions {
 }
 
 class AppState extends ChangeNotifier {
-  AppState(this._storage, this._scheduler, {DateTime Function()? clock})
+  AppState(this._storage, this._scheduler, {DateTime Function()? clock, this._outbox})
       : _clock = clock ?? DateTime.now {
     now = _clock();
     data = _storage.load(now);
@@ -31,6 +33,7 @@ class AppState extends ChangeNotifier {
   final Storage _storage;
   final NotificationScheduler _scheduler;
   final DateTime Function() _clock;
+  final LogOutbox? _outbox;
   late AppData data;
   late Set<String> dismissed;
   late DateTime now;
@@ -73,6 +76,7 @@ class AppState extends ChangeNotifier {
       final r = applyDoseAction(data, dismissed, p[0], p[1], DateTime.tryParse(p[2]) ?? _clock());
       data = r.data;
       dismissed = r.dismissed;
+      _enqueue([p[1]], _statusOf(p[0]), DateTime.tryParse(p[2]) ?? _clock());
     }
     await _storage.removePending(entries.length);
     return true;
@@ -114,12 +118,43 @@ class AppState extends ChangeNotifier {
     final r = applyDoseAction(data, dismissed, actionId, key, _clock());
     dismissed = r.dismissed;
     _commit(r.data);
+    _enqueue([key], _statusOf(actionId), _clock());
     await flush();
   }
 
+  /// `taken` | `skipped` for a notification button, null for anything that records no dose (`notyet`).
+  String? _statusOf(String actionId) => switch (actionId) { 'taken' => 'taken', 'skip' => 'skipped', _ => null };
+
+  /// Queues one server record per dose key and starts sending. A dose whose schedule the server has not
+  /// told us about yet is skipped silently. [status] null = nothing to send.
+  void _enqueue(Iterable<String> keys, String? status, DateTime at) {
+    final outbox = _outbox;
+    if (outbox == null || status == null) return;
+    var any = false;
+    for (final key in keys) {
+      final p = key.split('|');
+      final scheduleId = p.length == 3 ? data.scheduleIds['${p[0]}|${p[2]}'] : null;
+      if (scheduleId == null) continue;
+      final scheduledAt = doseTime(p[1], p[2]);
+      final taken = status == 'taken';
+      outbox.add(LogOp(
+        planId: p[0],
+        scheduleId: scheduleId,
+        status: status,
+        scheduledAt: scheduledAt,
+        takenAt: status == 'pending' ? null : at,
+        isLate: taken && at.difference(scheduledAt) > const Duration(minutes: 60),
+      ));
+      any = true;
+    }
+    if (any) unawaited(outbox.flush()); // errors are contained inside flush
+  }
+
   void _setLog(String key, DoseStatus s) {
-    final logs = {...data.logs, key: DoseLog(s == DoseStatus.skipped ? 'skipped' : 'taken', _clock().toIso8601String())};
-    _commit(data.copyWith(logs: logs));
+    final status = s == DoseStatus.skipped ? 'skipped' : 'taken';
+    final at = _clock();
+    _commit(data.copyWith(logs: {...data.logs, key: DoseLog(status, at.toIso8601String())}));
+    _enqueue([key], status, at);
   }
 
   void mark(DoseItem it, DoseStatus s) => _setLog(it.key, s);
@@ -137,12 +172,16 @@ class AppState extends ChangeNotifier {
     final at = _clock().toIso8601String();
     final logs = {...data.logs, for (final it in due) it.key: DoseLog('taken', at)};
     _commit(data.copyWith(logs: logs));
-    return due.map((e) => e.key).toList();
+    final keys = due.map((e) => e.key).toList();
+    _enqueue(keys, 'taken', _clock());
+    return keys;
   }
 
   void undoKeys(List<String> keys) {
+    final had = keys.where(data.logs.containsKey).toList();
     final logs = {...data.logs}..removeWhere((k, _) => keys.contains(k));
     _commit(data.copyWith(logs: logs));
+    _enqueue(had, 'pending', _clock());
   }
 
   /// Replaces the medicines with the server's plans and merges its taken/skipped logs.

@@ -17,7 +17,12 @@ class FakeMedRepository implements MedRepository {
   Completer<void>? gate;
   int plansCalls = 0, logsCalls = 0;
   DateTime? lastSince;
+  /// Successful upserts, in order.
   final upserts = <LogOp>[];
+  int upsertCalls = 0;
+
+  /// Runs before each upsert; throw from it (or await a gate) to script failures.
+  Future<void> Function(LogOp op)? onUpsert;
 
   @override
   Future<List<RemotePlan>> fetchPlans() async {
@@ -38,5 +43,9 @@ class FakeMedRepository implements MedRepository {
   }
 
   @override
-  Future<void> upsertLog(LogOp op) async => upserts.add(op);
+  Future<void> upsertLog(LogOp op) async {
+    upsertCalls++;
+    await onUpsert?.call(op);
+    upserts.add(op);
+  }
 }

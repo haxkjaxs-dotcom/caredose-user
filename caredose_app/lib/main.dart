@@ -7,6 +7,7 @@ import 'app.dart';
 import 'config.dart';
 import 'lifecycle_reloader.dart';
 import 'logic/auth_validators.dart';
+import 'services/log_outbox.dart';
 import 'services/med_sync.dart';
 import 'services/notification_service.dart';
 import 'services/storage.dart';
@@ -24,7 +25,9 @@ Future<void> main() async {
   await Supabase.initialize(url: supabaseUrl, publishableKey: supabasePublishableKey);
   final prefs = await SharedPreferences.getInstance();
   final service = NotificationService();
-  final state = AppState(Storage(prefs), service);
+  final medRepo = SupabaseMedRepository(Supabase.instance.client);
+  final outbox = LogOutbox(prefs, medRepo);
+  final state = AppState(Storage(prefs), service, outbox: outbox);
   final auth = AuthState(
     SupabaseAuthRepository(Supabase.instance.client),
     prefs,
@@ -33,10 +36,16 @@ Future<void> main() async {
       state.setPatient(p.nickname);
       state.setVerifiedPhone(displayPhone(phone));
     },
-    onSignedOut: () => state.resetAll(),
+    // Sign-out: try to send the last records first, then drop the queue so the next user never inherits it.
+    beforeSignOut: outbox.flush,
+    onSignedOut: () {
+      outbox.clear(); // synchronous in memory, so nothing of the old user is left when resetAll starts
+      state.resetAll();
+    },
   );
   await auth.init();
-  final medSync = MedSync(SupabaseMedRepository(Supabase.instance.client), state, canPull: () => auth.status == AuthStatus.ready);
+  // pull() flushes the outbox first (beforePull), so startup, resume and the 5-minute timer all retry unsent records.
+  final medSync = MedSync(medRepo, state, canPull: () => auth.status == AuthStatus.ready, beforePull: outbox.flush);
 
   // Reminders (and the notification permission prompt) only exist while a user is signed in.
   var notificationsStarted = false;
@@ -62,6 +71,7 @@ Future<void> main() async {
       ChangeNotifierProvider.value(value: auth),
       Provider<NotificationPermissions>.value(value: service),
       Provider<MedSync>.value(value: medSync),
+      Provider<LogOutbox>.value(value: outbox),
     ],
     child: const LifecycleReloader(child: CareDoseApp()),
   ));

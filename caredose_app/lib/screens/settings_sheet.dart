@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../services/log_outbox.dart';
 import '../state/app_state.dart';
 import '../state/auth_state.dart';
 import '../theme.dart';
@@ -43,10 +44,14 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
   Future<void> _signOut() async {
     final auth = context.read<AuthState>();
+    final unsent = context.read<LogOutbox>().pendingCount > 0;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        content: const Text('ออกจากระบบ? ข้อมูลยาและประวัติในเครื่องนี้จะถูกล้างด้วย'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('ออกจากระบบ? ข้อมูลยาและประวัติในเครื่องนี้จะถูกล้างด้วย'),
+          if (unsent) const Padding(padding: EdgeInsets.only(top: 8), child: Text('บันทึกการทานยาที่ยังส่งไม่ได้จะหายไป')),
+        ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('ยกเลิก')),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('ออกจากระบบ')),

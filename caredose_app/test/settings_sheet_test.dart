@@ -1,3 +1,5 @@
+import 'package:caredose/models/remote_plan.dart';
+import 'package:caredose/services/auth_repository.dart';
 import 'package:caredose/state/auth_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,6 +70,47 @@ void main() {
     expect(lastAuth.status, AuthStatus.loggedOut);
     expect(s.data.patient, '');
     expect(find.text('ส่งรหัส OTP'), findsOneWidget); // back at the login screen
+    await disposeApp(tester);
+  });
+
+  final queued = LogOp(planId: 'p1', scheduleId: 's1', status: 'taken', scheduledAt: DateTime.utc(2026, 11, 4, 1), takenAt: DateTime.utc(2026, 11, 4, 1, 5));
+  const warning = 'บันทึกการทานยาที่ยังส่งไม่ได้จะหายไป';
+
+  testWidgets('sign-out dialog has no unsent-records warning when the outbox is empty', (tester) async {
+    await pumpApp(tester);
+    await openSettings(tester);
+    await tapVisible(tester, find.widgetWithText(OutlinedButton, 'ออกจากระบบ'));
+    expect(find.text(warning), findsNothing);
+    await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('ยกเลิก')));
+    await tester.pumpAndSettle();
+    await disposeApp(tester);
+  });
+
+  testWidgets('sign-out dialog warns about unsent records; confirming flushes first, then empties the outbox', (tester) async {
+    await pumpApp(tester);
+    lastMedRepo.onUpsert = (_) async => throw const AuthFailure(AuthFailureKind.network); // offline: it cannot be sent
+    await lastOutbox.add(queued);
+    await openSettings(tester);
+    await tapVisible(tester, find.widgetWithText(OutlinedButton, 'ออกจากระบบ'));
+    expect(find.text(warning), findsOneWidget);
+    await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('ออกจากระบบ')));
+    await tester.pumpAndSettle();
+    expect(lastMedRepo.upsertCalls, 1); // flush was tried before leaving
+    expect(lastAuthRepo.signOutCalls, 1);
+    expect(lastOutbox.pendingCount, 0);
+    expect(lastAuth.status, AuthStatus.loggedOut);
+    await disposeApp(tester);
+  });
+
+  testWidgets('signing out while online sends the queued record before leaving', (tester) async {
+    await pumpApp(tester);
+    await lastOutbox.add(queued);
+    await openSettings(tester);
+    await tapVisible(tester, find.widgetWithText(OutlinedButton, 'ออกจากระบบ'));
+    await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('ออกจากระบบ')));
+    await tester.pumpAndSettle();
+    expect(lastMedRepo.upserts.single.scheduleId, 's1');
+    expect(lastOutbox.pendingCount, 0);
     await disposeApp(tester);
   });
 

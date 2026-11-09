@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -9,7 +10,14 @@ import '../services/auth_repository.dart';
 enum AuthStatus { loading, loggedOut, needsProfile, ready, unavailable, notRegistered }
 
 class AuthState extends ChangeNotifier {
-  AuthState(this._repo, this._prefs, {this.onSignedIn, this.onSignedOut});
+  AuthState(
+    this._repo,
+    this._prefs, {
+    this.onSignedIn,
+    this.onSignedOut,
+    this.beforeSignOut,
+    this.beforeSignOutTimeout = const Duration(seconds: 5),
+  });
 
   static const _cacheKey = 'caredose_profile';
   static const _ownerKey = 'caredose_owner'; // phone whose data lives on this device
@@ -20,6 +28,11 @@ class AuthState extends ChangeNotifier {
   /// Fired after a fresh sign-in (OTP verified with a profile, or a profile just saved).
   final void Function(Profile p, String phoneE164)? onSignedIn;
   final VoidCallback? onSignedOut;
+
+  /// Awaited (at most [beforeSignOutTimeout]) at the start of [signOut], while the session is still valid
+  /// (the outbox flush hooks in here). Its failure or timeout never blocks signing out.
+  final Future<void> Function()? beforeSignOut;
+  final Duration beforeSignOutTimeout;
 
   AuthStatus status = AuthStatus.loading;
   Profile? profile;
@@ -143,6 +156,11 @@ class AuthState extends ChangeNotifier {
 
   /// Always ends logged out and clears local data, even if the backend call fails.
   Future<void> signOut() async {
+    try {
+      await beforeSignOut?.call().timeout(beforeSignOutTimeout);
+    } catch (e) {
+      debugPrint('before sign out failed: $e');
+    }
     _epoch++;
     _pendingSignIn = false;
     try {

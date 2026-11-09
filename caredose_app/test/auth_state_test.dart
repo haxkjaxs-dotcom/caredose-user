@@ -13,6 +13,8 @@ const cacheKey = 'caredose_profile';
 Future<(AuthState, FakeAuthRepository, SharedPreferences, List<String>)> make({
   FakeAuthRepository? repo,
   Map<String, Object> prefs = const {},
+  Future<void> Function()? beforeSignOut,
+  Duration beforeSignOutTimeout = const Duration(seconds: 5),
 }) async {
   SharedPreferences.setMockInitialValues(prefs);
   final p = await SharedPreferences.getInstance();
@@ -23,6 +25,8 @@ Future<(AuthState, FakeAuthRepository, SharedPreferences, List<String>)> make({
     p,
     onSignedIn: (profile, phone) => events.add('in:${profile.nickname}:$phone'),
     onSignedOut: () => events.add('out'),
+    beforeSignOut: beforeSignOut,
+    beforeSignOutTimeout: beforeSignOutTimeout,
   );
   return (s, r, p, events);
 }
@@ -396,6 +400,44 @@ void main() {
     expect(s.status, AuthStatus.loggedOut);
     expect(prefs.getString(cacheKey), isNull);
     expect(events, ['out']);
+  });
+
+  group('beforeSignOut', () {
+    test('is awaited before the backend sign-out', () async {
+      final order = <String>[];
+      final repo = FakeAuthRepository(signedIn: true, stored: sampleProfile);
+      final (s, _, _, _) = await make(repo: repo, beforeSignOut: () async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        order.add('hook:signOutCalls=${repo.signOutCalls}');
+      });
+      await s.init();
+      await s.signOut();
+      order.add('after:signOutCalls=${repo.signOutCalls}');
+      expect(order, ['hook:signOutCalls=0', 'after:signOutCalls=1']);
+    });
+
+    test('a throwing hook does not prevent sign-out', () async {
+      final repo = FakeAuthRepository(signedIn: true, stored: sampleProfile);
+      final (s, _, _, events) = await make(repo: repo, beforeSignOut: () async => throw StateError('x'));
+      await s.init();
+      await s.signOut();
+      expect(repo.signOutCalls, 1);
+      expect(s.status, AuthStatus.loggedOut);
+      expect(events, ['out']);
+    });
+
+    test('a hook that never finishes is cut off by the timeout', () async {
+      final repo = FakeAuthRepository(signedIn: true, stored: sampleProfile);
+      final (s, _, _, events) = await make(
+        repo: repo,
+        beforeSignOut: () => Completer<void>().future,
+        beforeSignOutTimeout: const Duration(milliseconds: 50),
+      );
+      await s.init();
+      await s.signOut();
+      expect(repo.signOutCalls, 1);
+      expect(events, ['out']);
+    });
   });
 
   test('Profile.fromJson is used for the cache round-trip', () async {
