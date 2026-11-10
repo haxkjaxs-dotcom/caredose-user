@@ -11,7 +11,7 @@ import 'fake_notice_repository.dart';
 
 class _NoDisplay implements NoticeDisplay {
   @override
-  Future<void> show(int id, String title, String body) async {}
+  Future<bool> show(int id, String title, String body) async => true;
 }
 
 Future<FakeNoticeRepository> pumpScreen(WidgetTester tester, {AuthFailure? failure}) async {

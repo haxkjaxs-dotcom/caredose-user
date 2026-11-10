@@ -14,6 +14,7 @@ import 'notification_plan.dart';
 import 'storage.dart';
 
 const _channelId = 'dose_reminders';
+const _adminChannelId = 'admin_messages';
 const _iosCategory = 'dose';
 
 /// Notification buttons in display order: (actionId, Thai label).
@@ -115,15 +116,15 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
 
   /// An admin message, shown right away (no dose buttons).
   @override
-  Future<void> show(int id, String title, String body) async {
-    if (!_ready) return;
+  Future<bool> show(int id, String title, String body) async {
+    if (!_ready) return false;
     await _plugin.show(
       id: id,
       title: title,
       body: body,
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
-          'admin_messages',
+          _adminChannelId,
           'ข้อความจากผู้ดูแล',
           channelDescription: 'ข้อความที่ผู้ดูแลส่งถึงคุณ',
           importance: Importance.high,
@@ -132,12 +133,28 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
         iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
       ),
     );
+    return true;
+  }
+
+  /// Drops every scheduled reminder and every dose reminder already in the tray, but leaves admin messages there:
+  /// cancelAll() would also wipe a message the patient has not looked at yet each time a dose is recorded.
+  Future<void> _cancelDoseNotifications() async {
+    try {
+      await _plugin.cancelAllPendingNotifications();
+      for (final n in await _plugin.getActiveNotifications()) {
+        final id = n.id;
+        if (id != null && n.channelId != _adminChannelId) await _plugin.cancel(id: id);
+      }
+    } catch (e) {
+      debugPrint('selective cancel failed, cancelling everything: $e');
+      await _plugin.cancelAll();
+    }
   }
 
   @override
   Future<void> reschedule(AppData d, Set<String> dismissed, DateTime now) async {
     if (!_ready) return;
-    await _plugin.cancelAll();
+    await _cancelDoseNotifications();
     // zonedSchedule throws for a date already past, so keep a small lead over "now".
     final plan = planNotifications(d, dismissed, now.add(const Duration(seconds: 5)));
     if (plan.isEmpty) return;

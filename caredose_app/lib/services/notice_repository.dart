@@ -15,6 +15,7 @@ abstract class NoticeRepository {
 }
 
 /// Shows a message to the user outside the app (a system notification), so [NoticeSync] can be tested without the plugin.
+/// Returns false when it could not show it (plugin not ready yet): the message must then stay unread.
 abstract class NoticeDisplay {
-  Future<void> show(int id, String title, String body);
+  Future<bool> show(int id, String title, String body);
 }

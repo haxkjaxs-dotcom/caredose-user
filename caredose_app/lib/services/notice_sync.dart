@@ -75,26 +75,49 @@ class NoticeSync {
     }
   }
 
+  // id -> a show() still in flight. A duplicate of that message waits for the same result instead of racing it.
+  final Map<String, Future<bool>> _showing = {};
+
   Future<void> _handle(Notice n) async {
-    final fresh = _shown.add(n.id);
-    if (fresh) {
-      while (_shown.length > _shownCap) {
-        _shown.remove(_shown.first);
-      }
-      await _prefs.setStringList(_shownKey, _shown.toList());
-      try {
-        await _display.show(notificationId('notice|${n.id}', repeat: false), n.title, n.body);
-      } catch (e) {
-        debugPrint('showing notice ${n.id} failed: $e'); // still readable in the inbox
-      }
+    final inFlight = _showing[n.id];
+    if (inFlight == null && _shown.contains(n.id)) {
+      await _markRead(n.id); // shown earlier; this is the retry after a markRead that failed offline
+      return;
     }
-    // Also for an already-shown id: that is the retry after a markRead that failed offline.
+    // The id is claimed synchronously (before the first await), so Realtime and pull never both show it.
+    final shown = await (inFlight ?? (_showing[n.id] = _show(n)));
+    if (shown) await _markRead(n.id);
+  }
+
+  /// Shows [n] once. If it could not be shown (plugin not ready), the id is forgotten and the message stays unread
+  /// on the server, so the next pull tries again: marking it read would lose it for good.
+  Future<bool> _show(Notice n) async {
+    _shown.add(n.id);
+    while (_shown.length > _shownCap) {
+      _shown.remove(_shown.first);
+    }
+    var ok = false;
     try {
-      await _repo.markRead([n.id]);
+      await _prefs.setStringList(_shownKey, _shown.toList());
+      ok = await _display.show(notificationId('notice|${n.id}', repeat: false), n.title, n.body);
+    } catch (e) {
+      debugPrint('showing notice ${n.id} failed: $e');
+    }
+    if (!ok) {
+      _shown.remove(n.id);
+      await _prefs.setStringList(_shownKey, _shown.toList());
+    }
+    _showing.remove(n.id);
+    return ok;
+  }
+
+  Future<void> _markRead(String id) async {
+    try {
+      await _repo.markRead([id]);
     } on AuthFailure {
       // retried by the next pull
     } catch (e) {
-      debugPrint('marking notice ${n.id} read failed: $e');
+      debugPrint('marking notice $id read failed: $e');
     }
   }
 }

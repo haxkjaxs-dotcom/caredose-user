@@ -47,10 +47,12 @@ bool isDueOn(Med med, String date) {
 List<DoseItem> itemsFor(AppData d, String date, DateTime now) {
   final out = <DoseItem>[];
   for (final med in d.meds) {
-    if (!isDueOn(med, date)) continue;
+    final due = isDueOn(med, date);
     for (final time in med.times) {
       final key = '${med.id}|$date|$time';
       final log = d.logs[key];
+      // A rule or date change must not hide a dose that was already recorded (history and CSV export read this).
+      if (!due && log == null) continue;
       final DoseStatus status;
       if (log != null) {
         status = log.status == 'skipped' ? DoseStatus.skipped : DoseStatus.taken;

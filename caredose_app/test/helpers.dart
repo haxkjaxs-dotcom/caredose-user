@@ -91,7 +91,7 @@ late NoticeSync lastNoticeSync;
 
 class _NoDisplay implements NoticeDisplay {
   @override
-  Future<void> show(int id, String title, String body) async {}
+  Future<bool> show(int id, String title, String body) async => true;
 }
 
 /// Pumps the whole app on a 360x800 phone-sized screen. By default the user is already

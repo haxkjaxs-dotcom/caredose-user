@@ -102,6 +102,16 @@ void main() {
     });
   });
 
+  test('a dose already recorded on a day the rule no longer covers is kept (history and export)', () {
+    final d = AppData(
+      meds: [Med(id: '1', name: 'a', times: const ['08:00', '20:00'], start: '2026-11-01', days: const [1])],
+      logs: {'1|2026-11-10|08:00': const DoseLog('taken', '2026-11-10T08:05:00')}, // Tuesday
+    );
+    final items = itemsFor(d, '2026-11-10', DateTime(2026, 11, 11, 6));
+    expect(items.map((i) => i.time), ['08:00']); // the logged slot only, not the unlogged 20:00
+    expect(items.single.status, DoseStatus.taken);
+  });
+
   test('itemsFor skips a weekday med on a day it is not due', () {
     final d = AppData(meds: [Med(id: '1', name: 'a', times: const ['08:00'], start: '2026-11-01', days: const [1])]);
     expect(itemsFor(d, '2026-11-10', DateTime(2026, 11, 10, 6)), isEmpty); // Tue

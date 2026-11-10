@@ -11,8 +11,19 @@ import 'fake_notice_repository.dart';
 
 class FakeDisplay implements NoticeDisplay {
   final shown = <String>[];
+
+  /// What show() reports; false = the plugin was not ready.
+  bool ok = true;
+
+  /// When set, show() waits for it (to keep a display in flight).
+  Completer<void>? gate;
   @override
-  Future<void> show(int id, String title, String body) async => shown.add(title);
+  Future<bool> show(int id, String title, String body) async {
+    if (gate != null) await gate!.future;
+    if (!ok) return false;
+    shown.add(title);
+    return true;
+  }
 }
 
 Future<(FakeNoticeRepository, FakeDisplay, NoticeSync, SharedPreferences)> make({bool Function()? canPull}) async {
@@ -67,6 +78,36 @@ void main() {
     await sync.pull();
     expect(display.shown, ['t']);
     expect(repo.marked.expand((x) => x), ['1']);
+  });
+
+  test('a message the plugin could not show stays unread and is shown by a later pull', () async {
+    final (repo, display, sync, prefs) = await make();
+    repo.unread = [notice('1', title: 'a')];
+    display.ok = false; // plugin not initialised yet
+    await sync.pull();
+    expect(display.shown, isEmpty);
+    expect(repo.marked, isEmpty);
+    expect(prefs.getStringList('caredose_shown_notices') ?? <String>[], isEmpty);
+    display.ok = true;
+    await sync.pull();
+    expect(display.shown, ['a']);
+    expect(repo.marked.expand((x) => x), ['1']);
+  });
+
+  test('a duplicate that arrives while the first show is still failing is not marked read either', () async {
+    final (repo, display, sync, _) = await make();
+    repo.unread = [notice('1')];
+    display.ok = false;
+    display.gate = Completer<void>();
+    sync.start();
+    final pulling = sync.pull();
+    await Future<void>.delayed(Duration.zero);
+    repo.listener!(notice('1')); // same message over Realtime while show() is in flight
+    await Future<void>.delayed(Duration.zero);
+    display.gate!.complete();
+    await pulling;
+    await Future<void>.delayed(Duration.zero);
+    expect(repo.marked, isEmpty);
   });
 
   test('does nothing while canPull is false', () async {

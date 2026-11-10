@@ -70,6 +70,11 @@ Future<void> main() async {
       medSync.start();
       noticeSync.pull();
       noticeSync.start();
+      // A pull that finished before the notification plugin was ready could not show anything (those messages stay
+      // unread), so pull once more as soon as the plugin is up.
+      pluginReady.then((ok) {
+        if (ok) noticeSync.pull();
+      });
     } else {
       medSync.stop();
       noticeSync.stop();
