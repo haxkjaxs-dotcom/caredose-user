@@ -9,6 +9,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../models/models.dart';
 import '../state/app_state.dart';
+import 'notice_repository.dart';
 import 'notification_plan.dart';
 import 'storage.dart';
 
@@ -35,7 +36,7 @@ Future<void> notificationBackgroundHandler(NotificationResponse r) async {
   await FlutterLocalNotificationsPlugin().cancel(id: notificationId(key, repeat: true));
 }
 
-class NotificationService implements NotificationScheduler, NotificationPermissions {
+class NotificationService implements NotificationScheduler, NotificationPermissions, NoticeDisplay {
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
 
@@ -111,6 +112,27 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
         ),
         iOS: const DarwinNotificationDetails(categoryIdentifier: _iosCategory, presentAlert: true, presentSound: true),
       );
+
+  /// An admin message, shown right away (no dose buttons).
+  @override
+  Future<void> show(int id, String title, String body) async {
+    if (!_ready) return;
+    await _plugin.show(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'admin_messages',
+          'ข้อความจากผู้ดูแล',
+          channelDescription: 'ข้อความที่ผู้ดูแลส่งถึงคุณ',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+      ),
+    );
+  }
 
   @override
   Future<void> reschedule(AppData d, Set<String> dismissed, DateTime now) async {
