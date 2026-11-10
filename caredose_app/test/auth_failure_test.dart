@@ -37,6 +37,15 @@ void main() {
     expect(kind(PostgrestException(message: 'not allowed', code: '42501')), AuthFailureKind.rejected);
   });
 
+  test('data and constraint errors from the database are rejected; other server errors stay unknown', () {
+    for (final code in ['23503', '23514', '22P02', '23505', '22007']) {
+      expect(kind(PostgrestException(message: 'bad', code: code)), AuthFailureKind.rejected, reason: code);
+    }
+    expect(kind(PostgrestException(message: 'x', code: 'PGRST301')), AuthFailureKind.unknown);
+    expect(kind(PostgrestException(message: 'x', code: '500')), AuthFailureKind.unknown);
+    expect(kind(PostgrestException(message: 'x')), AuthFailureKind.unknown);
+  });
+
   test('patients row to Profile', () {
     final row = {
       'nickname': 'สมศรี',

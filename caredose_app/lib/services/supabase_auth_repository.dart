@@ -25,6 +25,9 @@ AuthFailure mapAuthError(Object e) {
   if (e is PostgrestException) {
     if (e.code == 'P0001' && e.message.contains('เบอร์ซ้ำ')) return const AuthFailure(AuthFailureKind.duplicatePhone);
     if (e.code == '42501') return const AuthFailure(AuthFailureKind.rejected);
+    // Data (22xxx) and constraint (23xxx) errors: retrying the same payload can never succeed.
+    final c = e.code ?? '';
+    if (c.startsWith('22') || c.startsWith('23')) return const AuthFailure(AuthFailureKind.rejected);
   }
   return const AuthFailure(AuthFailureKind.unknown);
 }

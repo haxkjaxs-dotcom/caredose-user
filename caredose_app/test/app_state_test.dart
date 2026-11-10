@@ -384,6 +384,41 @@ void outboxTests() {
       expect(o.pending.map((e) => '${e.scheduleId}:${e.status}'), ['sch-m1:taken', 'sch-m2a:skipped']);
     });
 
+    group('applyRemote respects ops still waiting to be sent', () {
+      final at8 = DateTime(2026, 11, 4, 8).toUtc();
+      RemoteLog server(String plan, String sid, String status) => RemoteLog(planId: plan, scheduleId: sid, status: status, scheduledAt: at8, takenAt: at8);
+
+      test('a queued undo is not undone by a server row that still says taken', () async {
+        final (s, o, _) = await setUp();
+        final it = itemsFor(s.data, date, s.now).first; // m1 08:00
+        s.mark(it, DoseStatus.taken);
+        s.undo(it);
+        expect(o.pending.single.status, 'pending');
+        s.applyRemote(plans: [_plan('m1', sid: 'sch-m1')], logs: [server('m1', 'sch-m1', 'taken')]);
+        expect(s.data.logs.containsKey(it.key), false);
+      });
+
+      test('a queued taken is not overwritten by a server skipped', () async {
+        final (s, _, _) = await setUp();
+        final it = itemsFor(s.data, date, s.now).first;
+        s.mark(it, DoseStatus.taken);
+        s.applyRemote(plans: [_plan('m1', sid: 'sch-m1')], logs: [server('m1', 'sch-m1', 'skipped')]);
+        expect(s.data.logs[it.key]?.status, 'taken');
+      });
+
+      test('a dose with nothing queued still takes the server value', () async {
+        final (s, o, _) = await setUp();
+        s.mark(itemsFor(s.data, date, s.now).first, DoseStatus.taken); // m1 queued
+        s.applyRemote(
+          plans: [_plan('m1', sid: 'sch-m1'), _plan('m2', sid: 'sch-m2a')],
+          logs: [server('m1', 'sch-m1', 'skipped'), server('m2', 'sch-m2a', 'skipped')],
+        );
+        expect(s.data.logs['m1|$date|08:00']?.status, 'taken');
+        expect(s.data.logs['m2|$date|08:00']?.status, 'skipped');
+        expect(o.pendingCount, 1);
+      });
+    });
+
     test('presses queued by the background isolate are enqueued with their press time', () async {
       final (s, o, storage) = await setUp();
       await storage.appendPending('taken\tm1|2026-11-04|08:00\t2026-11-04T08:20:00.000');

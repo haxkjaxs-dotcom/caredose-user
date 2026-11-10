@@ -191,8 +191,11 @@ class AppState extends ChangeNotifier {
       for (final p in plans) for (final s in p.schedules) '${p.id}|${s.time}': s.id,
     };
     final merged = {...data.logs};
+    // A dose with a press still waiting to be sent is authoritative here: the server does not know it yet.
+    final queued = _outbox?.pending ?? const <LogOp>[];
     for (final l in logs) {
       if (l.status != 'taken' && l.status != 'skipped') continue; // pending/missed carry no information
+      if (queued.any((o) => o.scheduleId == l.scheduleId && o.scheduledAt.isAtSameMomentAs(l.scheduledAt))) continue;
       final t = l.scheduledAt.toLocal();
       final hh = t.hour.toString().padLeft(2, '0'), mm = t.minute.toString().padLeft(2, '0');
       merged['${l.planId}|${dateKey(t)}|$hh:$mm'] = DoseLog(l.status, (l.takenAt ?? l.scheduledAt).toLocal().toIso8601String());

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:caredose/models/remote_plan.dart';
 import 'package:caredose/services/auth_repository.dart';
 import 'package:caredose/services/log_outbox.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -179,6 +180,39 @@ void main() {
       final (o, _, _) = await make({'caredose_outbox': bad});
       expect(o.pendingCount, 0, reason: bad);
     }
+  });
+
+  test('entries with an empty planId or scheduleId are dropped at load', () async {
+    final (o, _, _) = await make({
+      'caredose_outbox': jsonEncode([
+        {...op('s1', 1).toJson(), 'scheduleId': ''},
+        {...op('s2', 2).toJson(), 'planId': ''},
+        {...op('s3', 3).toJson()}..remove('scheduleId'),
+        op('s4', 4).toJson(),
+      ]),
+    });
+    expect(o.pending.map((e) => e.scheduleId), ['s4']);
+  });
+
+  test('a rejected head entry is logged when dropped and never blocks the ones behind it', () async {
+    final (o, repo, _) = await make();
+    await o.add(op('bad', 1));
+    await o.add(op('s2', 2));
+    await o.add(op('s3', 3));
+    repo.onUpsert = (e) async {
+      if (e.scheduleId == 'bad') throw const AuthFailure(AuthFailureKind.rejected);
+    };
+    final lines = <String>[];
+    final old = debugPrint;
+    debugPrint = (String? m, {int? wrapWidth}) => lines.add(m ?? '');
+    try {
+      await o.flush();
+    } finally {
+      debugPrint = old;
+    }
+    expect(repo.upserts.map((e) => e.scheduleId), ['s2', 's3']);
+    expect(o.pendingCount, 0);
+    expect(lines.where((l) => l.contains('bad') && l.contains('rejected')), hasLength(1));
   });
 
   test('one bad entry among good ones is dropped', () async {

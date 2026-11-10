@@ -37,7 +37,8 @@ class LogOutbox {
       if (list is! List) return out;
       for (final e in list) {
         try {
-          out.add(LogOp.fromJson(Json.from(e as Map)));
+          final op = LogOp.fromJson(Json.from(e as Map));
+          if (op.planId.isNotEmpty && op.scheduleId.isNotEmpty) out.add(op); // the server could never accept it
         } catch (_) {}
       }
     } catch (_) {}
@@ -80,6 +81,7 @@ class LogOutbox {
       } on AuthFailure catch (f) {
         drop = f.kind == AuthFailureKind.rejected; // the server will never take it
         if (!drop) return;
+        debugPrint('outbox dropped ${op.status} for schedule ${op.scheduleId} at ${op.scheduledAt.toUtc().toIso8601String()}: rejected');
       } catch (e) {
         debugPrint('outbox flush failed: $e');
         return;
