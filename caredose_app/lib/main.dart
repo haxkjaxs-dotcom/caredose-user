@@ -51,7 +51,7 @@ Future<void> main() async {
   var notificationsStarted = false;
   // The plugin is initialised once at startup whatever the auth state, so that a signed-out or
   // not-yet-registered user still gets every old reminder cancelled (reschedule is a no-op before init).
-  late final Future<void> pluginReady;
+  final pluginReady = _initNotifications(service, state);
   void syncReminders() {
     final ready = auth.status == AuthStatus.ready;
     state.setRemindersEnabled(ready);
@@ -78,24 +78,26 @@ Future<void> main() async {
     ],
     child: const LifecycleReloader(child: CareDoseApp()),
   ));
-  pluginReady = _initNotifications(service, state);
   syncReminders(); // after runApp so the UI shows before any permission dialog
 }
 
 /// Initialises the notification plugin (exactly once) and applies the current reminder setting,
 /// which cancels everything while signed out.
-Future<void> _initNotifications(NotificationService service, AppState state) async {
+/// Returns false when the plugin could not start (no permission prompt must follow then).
+Future<bool> _initNotifications(NotificationService service, AppState state) async {
   try {
     await service.init(onAction: state.applyNotificationAction);
     await state.rescheduleNow();
+    return true;
   } catch (e) {
     debugPrint('notification init failed: $e');
+    return false;
   }
 }
 
-Future<void> _startNotifications(NotificationService service, AppState state, Future<void> pluginReady) async {
+Future<void> _startNotifications(NotificationService service, AppState state, Future<bool> pluginReady) async {
   try {
-    await pluginReady;
+    if (!await pluginReady) return;
     await service.requestPermissions();
     await state.reload();
     await state.rescheduleNow();

@@ -10,11 +10,12 @@ import 'auth_repository.dart';
 /// Maps any exception from Supabase / the network to an [AuthFailure].
 AuthFailure mapAuthError(Object e) {
   if (e is AuthFailure) return e;
-  if (e is AuthRetryableFetchException || e is SocketException || e is TimeoutException || e is http.ClientException) {
+  if (e is AuthRetryableFetchException || e is SocketException || e is TimeoutException || e is http.ClientException || e is FormatException) {
     return const AuthFailure(AuthFailureKind.network);
   }
   if (e is AuthException) {
     final code = e.code ?? '';
+    if ((int.tryParse(e.statusCode ?? '') ?? 0) >= 500) return const AuthFailure(AuthFailureKind.network);
     if (code == 'over_sms_send_rate_limit' || code == 'over_request_rate_limit' || e.statusCode == '429') {
       return const AuthFailure(AuthFailureKind.rateLimited);
     }
@@ -28,6 +29,8 @@ AuthFailure mapAuthError(Object e) {
     // Data (22xxx) and constraint (23xxx) errors: retrying the same payload can never succeed.
     final c = e.code ?? '';
     if (c.startsWith('22') || c.startsWith('23')) return const AuthFailure(AuthFailureKind.rejected);
+    // Server unreachable or unhealthy (5xx, class 53/57/58 SQLSTATEs, an HTML gateway page): transient, never counts against an entry.
+    if (c.startsWith('5') || e.message.trimLeft().startsWith('<')) return const AuthFailure(AuthFailureKind.network);
   }
   return const AuthFailure(AuthFailureKind.unknown);
 }

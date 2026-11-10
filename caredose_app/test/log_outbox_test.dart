@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:caredose/models/remote_plan.dart';
 import 'package:caredose/services/auth_repository.dart';
 import 'package:caredose/services/log_outbox.dart';
+import 'package:caredose/services/supabase_auth_repository.dart' show mapAuthError;
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -244,6 +246,26 @@ void main() {
         }
       }
       expect(o.pending.single.attempts, 0);
+    });
+
+    test('a server outage (502 / HTML body) never burns attempts, even over 10 flushes', () async {
+      final (o, repo, _) = await make();
+      await o.add(op('s1', 1));
+      repo.onUpsert = (e) async => throw mapAuthError(PostgrestException(message: '<html>Bad Gateway</html>', code: '502'));
+      for (var i = 0; i < 10; i++) {
+        await o.flush();
+      }
+      expect(o.pending.single.attempts, 0);
+    });
+
+    test('an unclassified error still counts and drops at 8', () async {
+      final (o, repo, _) = await make();
+      await o.add(op('s1', 1));
+      repo.onUpsert = (e) async => throw mapAuthError(StateError('weird'));
+      for (var i = 0; i < 8; i++) {
+        await o.flush();
+      }
+      expect(o.pendingCount, 0);
     });
 
     test('attempts survive a restart, and a replacing add starts again from 0', () async {

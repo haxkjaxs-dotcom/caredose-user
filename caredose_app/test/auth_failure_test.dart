@@ -5,6 +5,7 @@ import 'package:caredose/services/auth_repository.dart';
 import 'package:caredose/services/supabase_auth_repository.dart';
 import 'package:caredose/services/supabase_med_repository.dart' show requireUserId;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthApiException, AuthRetryableFetchException, PostgrestException;
 
 void main() {
@@ -43,8 +44,21 @@ void main() {
       expect(kind(PostgrestException(message: 'bad', code: code)), AuthFailureKind.rejected, reason: code);
     }
     expect(kind(PostgrestException(message: 'x', code: 'PGRST301')), AuthFailureKind.unknown);
-    expect(kind(PostgrestException(message: 'x', code: '500')), AuthFailureKind.unknown);
     expect(kind(PostgrestException(message: 'x')), AuthFailureKind.unknown);
+  });
+
+  test('a server outage is a network failure, never unknown', () {
+    expect(kind(PostgrestException(message: '<html>Bad Gateway</html>', code: '502')), AuthFailureKind.network);
+    expect(kind(PostgrestException(message: 'x', code: '500')), AuthFailureKind.network);
+    expect(kind(PostgrestException(message: '<!DOCTYPE html><html>', code: 'PGRST000')), AuthFailureKind.network);
+    expect(kind(PostgrestException(message: 'x', code: '57P03')), AuthFailureKind.network); // db starting up
+    expect(kind(const FormatException('Unexpected character')), AuthFailureKind.network);
+    expect(kind(const AuthApiException('x', statusCode: '503')), AuthFailureKind.network);
+    expect(kind(http.ClientException('connection closed')), AuthFailureKind.network);
+    // permanent business errors keep their meaning, and plain unknowns stay unknown
+    expect(kind(const AuthApiException('x', statusCode: '403', code: 'otp_expired')), AuthFailureKind.invalidCode);
+    expect(kind(PostgrestException(message: 'x', code: '23503')), AuthFailureKind.rejected);
+    expect(kind(PostgrestException(message: 'x', code: 'PGRST301')), AuthFailureKind.unknown);
   });
 
   group('guardCall', () {
