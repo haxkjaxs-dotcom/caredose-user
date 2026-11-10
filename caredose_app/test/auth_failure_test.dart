@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:caredose/services/auth_repository.dart';
 import 'package:caredose/services/supabase_auth_repository.dart';
+import 'package:caredose/services/supabase_med_repository.dart' show requireUserId;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthApiException, AuthRetryableFetchException, PostgrestException;
 
@@ -44,6 +45,29 @@ void main() {
     expect(kind(PostgrestException(message: 'x', code: 'PGRST301')), AuthFailureKind.unknown);
     expect(kind(PostgrestException(message: 'x', code: '500')), AuthFailureKind.unknown);
     expect(kind(PostgrestException(message: 'x')), AuthFailureKind.unknown);
+  });
+
+  group('guardCall', () {
+    test('a call that never finishes becomes a network failure after the timeout', () async {
+      await expectLater(
+        guardCall(() => Completer<int>().future, timeout: const Duration(milliseconds: 30)),
+        throwsA(isA<AuthFailure>().having((f) => f.kind, 'kind', AuthFailureKind.network)),
+      );
+    });
+
+    test('returns the value and maps errors like mapAuthError', () async {
+      expect(await guardCall(() async => 7), 7);
+      await expectLater(guardCall<void>(() async => throw const SocketException('x')), throwsA(isA<AuthFailure>().having((f) => f.kind, 'kind', AuthFailureKind.network)));
+      await expectLater(
+        guardCall<void>(() async => throw PostgrestException(message: 'fk', code: '23503')),
+        throwsA(isA<AuthFailure>().having((f) => f.kind, 'kind', AuthFailureKind.rejected)),
+      );
+    });
+  });
+
+  test('a missing signed-in user keeps queued records (network), it does not reject them', () {
+    expect(requireUserId('u1'), 'u1');
+    expect(() => requireUserId(null), throwsA(isA<AuthFailure>().having((f) => f.kind, 'kind', AuthFailureKind.network)));
   });
 
   test('patients row to Profile', () {

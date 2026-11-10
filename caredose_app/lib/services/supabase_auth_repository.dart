@@ -32,6 +32,16 @@ AuthFailure mapAuthError(Object e) {
   return const AuthFailure(AuthFailureKind.unknown);
 }
 
+/// Runs a network call with a timeout (a half-open socket would otherwise hang the caller forever)
+/// and turns every error into an [AuthFailure].
+Future<T> guardCall<T>(Future<T> Function() run, {Duration timeout = const Duration(seconds: 20)}) async {
+  try {
+    return await run().timeout(timeout);
+  } catch (e) {
+    throw mapAuthError(e);
+  }
+}
+
 /// A `patients` row as a [Profile]; null until the patient has completed onboarding.
 Profile? profileFromPatientRow(Map<String, dynamic>? row) {
   final done = row?['profile_completed_at'];
@@ -54,26 +64,18 @@ class SupabaseAuthRepository implements AuthRepository {
     return p.startsWith('+') ? p : '+$p';
   }
 
-  Future<T> _guard<T>(Future<T> Function() run) async {
-    try {
-      return await run();
-    } catch (e) {
-      throw mapAuthError(e);
-    }
-  }
-
   @override
-  Future<void> sendOtp(String e164) => _guard(() => _c.auth.signInWithOtp(phone: e164));
+  Future<void> sendOtp(String e164) => guardCall(() => _c.auth.signInWithOtp(phone: e164));
 
   @override
   Future<void> verifyOtp(String e164, String code) =>
-      _guard(() => _c.auth.verifyOTP(phone: e164, token: code, type: OtpType.sms));
+      guardCall(() => _c.auth.verifyOTP(phone: e164, token: code, type: OtpType.sms));
 
   @override
-  Future<String?> claimPatient() => _guard(() async => (await _c.rpc('claim_my_patient')) as String?);
+  Future<String?> claimPatient() => guardCall(() async => (await _c.rpc('claim_my_patient')) as String?);
 
   @override
-  Future<Profile?> loadProfile() => _guard(() async {
+  Future<Profile?> loadProfile() => guardCall(() async {
         final uid = _c.auth.currentUser?.id;
         if (uid == null) return null;
         final row = await _c
@@ -85,7 +87,7 @@ class SupabaseAuthRepository implements AuthRepository {
       });
 
   @override
-  Future<void> saveProfile(Profile p) => _guard(() async {
+  Future<void> saveProfile(Profile p) => guardCall(() async {
         await _c.rpc('save_my_profile', params: {
           'p_nickname': p.nickname,
           'p_full_name': p.fullName,
@@ -96,5 +98,5 @@ class SupabaseAuthRepository implements AuthRepository {
       });
 
   @override
-  Future<void> signOut() => _guard(() => _c.auth.signOut());
+  Future<void> signOut() => guardCall(() => _c.auth.signOut());
 }

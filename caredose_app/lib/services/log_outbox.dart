@@ -16,6 +16,7 @@ class LogOutbox {
   LogOutbox(this._prefs, this._repo) : _queue = _load(_prefs);
 
   static const _key = 'caredose_outbox';
+  static const _maxAttempts = 8; // "unknown" server errors tolerated per entry before it is dropped
 
   final SharedPreferences _prefs;
   final MedRepository _repo;
@@ -75,13 +76,26 @@ class LogOutbox {
   Future<void> _run(int epoch) async {
     while (epoch == _epoch && _queue.isNotEmpty) {
       final op = _queue.first;
-      var drop = true;
       try {
         await _repo.upsertLog(op);
       } on AuthFailure catch (f) {
-        drop = f.kind == AuthFailureKind.rejected; // the server will never take it
-        if (!drop) return;
-        debugPrint('outbox dropped ${op.status} for schedule ${op.scheduleId} at ${op.scheduledAt.toUtc().toIso8601String()}: rejected');
+        if (epoch != _epoch) return;
+        if (f.kind == AuthFailureKind.rejected) {
+          // the server will never take it: dropped below
+          debugPrint('outbox dropped ${op.status} for schedule ${op.scheduleId} at ${op.scheduledAt.toUtc().toIso8601String()}: rejected');
+        } else if (f.kind == AuthFailureKind.unknown) {
+          final i = _queue.indexOf(op); // -1: replaced by a newer press while in flight, which starts fresh
+          if (i < 0) return;
+          final n = op.attempts + 1;
+          if (n < _maxAttempts) {
+            _queue[i] = op.withAttempts(n);
+            await _save();
+            return;
+          }
+          debugPrint('outbox dropped ${op.status} for schedule ${op.scheduleId} at ${op.scheduledAt.toUtc().toIso8601String()}: unknown error $n times');
+        } else {
+          return; // network / rateLimited: keep, never counted
+        }
       } catch (e) {
         debugPrint('outbox flush failed: $e');
         return;

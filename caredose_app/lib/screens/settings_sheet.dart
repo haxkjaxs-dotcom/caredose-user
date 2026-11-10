@@ -201,7 +201,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
       if (about)
         const Padding(
           padding: EdgeInsets.only(top: 12),
-          child: Text('CareDose (ยาอุ่นใจ) ข้อมูลยาและประวัติการทานยาเก็บในเครื่องนี้ ส่วนข้อมูลส่วนตัวเก็บในระบบหลังเข้าสู่ระบบด้วยเบอร์โทร', style: TextStyle(fontSize: 14)),
+          child: Text('CareDose (ยาอุ่นใจ) ข้อมูลยา ประวัติการทานยา และข้อมูลส่วนตัวถูกเก็บในระบบหลังเข้าสู่ระบบด้วยเบอร์โทร และมีสำเนาในเครื่องนี้ไว้ใช้ตอนไม่มีอินเทอร์เน็ต', style: TextStyle(fontSize: 14)),
         ),
     ]);
   }

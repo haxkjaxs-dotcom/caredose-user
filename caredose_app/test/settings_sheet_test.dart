@@ -45,7 +45,8 @@ void main() {
     await openSettings(tester);
     await tapVisible(tester, find.text('เกี่ยวกับแอป'));
     expect(find.textContaining('ไม่มีระบบบัญชี'), findsNothing);
-    expect(find.textContaining('ข้อมูลส่วนตัวเก็บในระบบหลังเข้าสู่ระบบด้วยเบอร์โทร'), findsOneWidget);
+    expect(find.textContaining('ประวัติการทานยาเก็บในเครื่องนี้'), findsNothing);
+    expect(find.textContaining('ข้อมูลยา ประวัติการทานยา และข้อมูลส่วนตัวถูกเก็บในระบบหลังเข้าสู่ระบบด้วยเบอร์โทร และมีสำเนาในเครื่องนี้ไว้ใช้ตอนไม่มีอินเทอร์เน็ต'), findsOneWidget);
     await disposeApp(tester);
   });
 

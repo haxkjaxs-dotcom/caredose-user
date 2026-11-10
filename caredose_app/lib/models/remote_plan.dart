@@ -83,6 +83,9 @@ class LogOp {
   final DateTime scheduledAt;
   final DateTime? takenAt;
   final bool isLate;
+
+  /// How many times the server answered "unknown error" for this op (the outbox gives up after a few).
+  final int attempts;
   const LogOp({
     required this.planId,
     required this.scheduleId,
@@ -90,7 +93,18 @@ class LogOp {
     required this.scheduledAt,
     this.takenAt,
     this.isLate = false,
+    this.attempts = 0,
   });
+
+  LogOp withAttempts(int n) => LogOp(
+        planId: planId,
+        scheduleId: scheduleId,
+        status: status,
+        scheduledAt: scheduledAt,
+        takenAt: takenAt,
+        isLate: isLate,
+        attempts: n,
+      );
 
   Json toJson() => {
         'planId': planId,
@@ -99,6 +113,7 @@ class LogOp {
         'scheduledAt': scheduledAt.toUtc().toIso8601String(),
         'takenAt': takenAt?.toUtc().toIso8601String(),
         'isLate': isLate,
+        'attempts': attempts,
       };
 
   factory LogOp.fromJson(Json j) => LogOp(
@@ -108,5 +123,6 @@ class LogOp {
         scheduledAt: DateTime.parse(_s(j['scheduledAt'])),
         takenAt: j['takenAt'] is String ? DateTime.parse(j['takenAt'] as String) : null,
         isLate: j['isLate'] == true,
+        attempts: j['attempts'] is int ? j['attempts'] as int : 0,
       );
 }

@@ -215,6 +215,55 @@ void main() {
     expect(lines.where((l) => l.contains('bad') && l.contains('rejected')), hasLength(1));
   });
 
+  group('attempts', () {
+    test('an entry failing unknown 8 times is dropped on the 8th and the ones behind it are sent', () async {
+      final (o, repo, _) = await make();
+      await o.add(op('bad', 1));
+      await o.add(op('s2', 2));
+      repo.onUpsert = (e) async {
+        if (e.scheduleId == 'bad') throw const AuthFailure(AuthFailureKind.unknown);
+      };
+      for (var i = 1; i <= 7; i++) {
+        await o.flush();
+        expect(o.pending.map((e) => e.scheduleId), ['bad', 's2'], reason: 'after failure $i');
+        expect(o.pending.first.attempts, i);
+      }
+      expect(repo.upserts, isEmpty);
+      await o.flush(); // 8th failure: dropped, then s2 goes through in the same flush
+      expect(o.pendingCount, 0);
+      expect(repo.upserts.map((e) => e.scheduleId), ['s2']);
+    });
+
+    test('network and rateLimited failures never count, however many times', () async {
+      final (o, repo, _) = await make();
+      await o.add(op('s1', 1));
+      for (final kind in [AuthFailureKind.network, AuthFailureKind.rateLimited]) {
+        repo.onUpsert = (e) async => throw AuthFailure(kind);
+        for (var i = 0; i < 20; i++) {
+          await o.flush();
+        }
+      }
+      expect(o.pending.single.attempts, 0);
+    });
+
+    test('attempts survive a restart, and a replacing add starts again from 0', () async {
+      final (o, repo, prefs) = await make();
+      await o.add(op('s1', 1));
+      repo.onUpsert = (e) async => throw const AuthFailure(AuthFailureKind.unknown);
+      await o.flush();
+      await o.flush();
+      final o2 = LogOutbox(prefs, repo);
+      expect(o2.pending.single.attempts, 2);
+      await o2.add(op('s1', 1, status: 'pending'));
+      expect(o2.pending.single.attempts, 0);
+    });
+
+    test('an old stored entry without attempts loads as 0', () async {
+      final (o, _, _) = await make({'caredose_outbox': jsonEncode([op('s1', 1).toJson()..remove('attempts')])});
+      expect(o.pending.single.attempts, 0);
+    });
+  });
+
   test('one bad entry among good ones is dropped', () async {
     final (o, _, _) = await make({
       'caredose_outbox': jsonEncode([op('s1', 1).toJson(), {'scheduledAt': 'nope'}, 7, op('s2', 2).toJson()]),

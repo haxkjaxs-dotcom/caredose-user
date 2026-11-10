@@ -4,23 +4,22 @@ import '../models/models.dart';
 import '../models/remote_plan.dart';
 import 'auth_repository.dart';
 import 'med_repository.dart';
-import 'supabase_auth_repository.dart' show mapAuthError;
+import 'supabase_auth_repository.dart' show guardCall;
+
+/// No signed-in user (e.g. the server ended the session) must not drop queued records:
+/// reported as a network failure so they wait for the next sign-in.
+String requireUserId(String? uid) {
+  if (uid == null) throw const AuthFailure(AuthFailureKind.network);
+  return uid;
+}
 
 // Thin network wrapper, no unit tests: all mapping logic lives in remote_plan.dart.
 class SupabaseMedRepository implements MedRepository {
   SupabaseMedRepository(this._c);
   final SupabaseClient _c;
 
-  Future<T> _guard<T>(Future<T> Function() run) async {
-    try {
-      return await run();
-    } catch (e) {
-      throw mapAuthError(e);
-    }
-  }
-
   @override
-  Future<List<RemotePlan>> fetchPlans() => _guard(() async {
+  Future<List<RemotePlan>> fetchPlans() => guardCall(() async {
         final rows = await _c
             .from('medication_plans')
             .select('*, medicines(generic_name,trade_name,warning), medication_schedules(id,time_of_day,days_of_week,interval_days)')
@@ -29,7 +28,7 @@ class SupabaseMedRepository implements MedRepository {
       });
 
   @override
-  Future<List<RemoteLog>> fetchLogs(DateTime since) => _guard(() async {
+  Future<List<RemoteLog>> fetchLogs(DateTime since) => guardCall(() async {
         final rows = await _c
             .from('medication_logs')
             .select()
@@ -39,9 +38,8 @@ class SupabaseMedRepository implements MedRepository {
       });
 
   @override
-  Future<void> upsertLog(LogOp op) => _guard(() async {
-        final uid = _c.auth.currentUser?.id;
-        if (uid == null) throw const AuthFailure(AuthFailureKind.rejected);
+  Future<void> upsertLog(LogOp op) => guardCall(() async {
+        final uid = requireUserId(_c.auth.currentUser?.id);
         await _c.from('medication_logs').upsert({
           'plan_id': op.planId,
           'schedule_id': op.scheduleId,
