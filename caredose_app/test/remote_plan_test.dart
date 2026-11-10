@@ -60,13 +60,13 @@ void main() {
       expect(RemotePlan.fromJson(planJson(endDate: '2026-12-01')).end, '2026-12-01');
     });
 
-    test('weekday and interval schedules are skipped', () {
+    test('rows that carry a day rule are kept like any other (phase 2; they used to be skipped)', () {
       final p = RemotePlan.fromJson(planJson(schedules: [
         {'id': 'a', 'time_of_day': '07:00:00', 'days_of_week': [1, 3], 'interval_days': null},
         {'id': 'b', 'time_of_day': '09:00:00', 'days_of_week': null, 'interval_days': 2},
         {'id': 'c', 'time_of_day': '12:30:00', 'days_of_week': null, 'interval_days': null},
       ]));
-      expect(p.schedules.map((s) => s.id), ['c']);
+      expect(p.schedules.map((s) => s.id), ['a', 'b', 'c']);
     });
 
     test('duplicate times keep only the first row', () {
@@ -130,6 +130,39 @@ void main() {
       expect((l.planId, l.scheduleId, l.status), ('p', 's', 'taken'));
       expect(l.scheduledAt, DateTime.utc(2026, 11, 4, 1));
       expect(l.takenAt, DateTime.utc(2026, 11, 4, 1, 20));
+    });
+  });
+
+  group('RemotePlan rules', () {
+    test('weekday and interval rows are no longer skipped; the rule is read', () {
+      final p = RemotePlan.fromJson(planJson(schedules: [
+        {'id': 's1', 'time_of_day': '08:00:00', 'days_of_week': [1, 3], 'interval_days': null},
+        {'id': 's2', 'time_of_day': '20:00:00', 'days_of_week': [1, 3], 'interval_days': null},
+      ]));
+      expect(p.schedules.map((s) => s.time), ['08:00', '20:00']);
+      expect(p.days, [1, 3]);
+      expect(p.intervalDays, 0);
+      final m = p.toMed();
+      expect([m.days, m.intervalDays], [[1, 3], 0]);
+    });
+    test('interval rule, and interval 1 is treated as every day', () {
+      expect(RemotePlan.fromJson(planJson(schedules: [
+        {'id': 's1', 'time_of_day': '08:00:00', 'days_of_week': null, 'interval_days': 2},
+      ])).intervalDays, 2);
+      expect(RemotePlan.fromJson(planJson(schedules: [
+        {'id': 's1', 'time_of_day': '08:00:00', 'days_of_week': null, 'interval_days': 1},
+      ])).intervalDays, 0);
+    });
+    test('rows that disagree: the earliest time wins', () {
+      final p = RemotePlan.fromJson(planJson(schedules: [
+        {'id': 's2', 'time_of_day': '20:00:00', 'days_of_week': null, 'interval_days': 2},
+        {'id': 's1', 'time_of_day': '08:00:00', 'days_of_week': [2], 'interval_days': null},
+      ]));
+      expect([p.days, p.intervalDays], [[2], 0]);
+    });
+    test('no rule is every day', () {
+      final p = RemotePlan.fromJson(planJson());
+      expect([p.days, p.intervalDays], [<int>[], 0]);
     });
   });
 }

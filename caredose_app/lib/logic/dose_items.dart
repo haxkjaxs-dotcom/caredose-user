@@ -26,12 +26,28 @@ class DoseItem {
 
 DateTime doseTime(String date, String time) => DateTime.parse('${date}T$time');
 
+/// Whether [med] has doses on [date] (yyyy-MM-dd): inside start/end, then its day rule.
+/// Weekdays are ISO (1 = Monday ... 7 = Sunday). Every-N-days counts whole days from `start`;
+/// without a start date that rule cannot be counted, so it falls back to every day.
+bool isDueOn(Med med, String date) {
+  if (med.start.isNotEmpty && date.compareTo(med.start) < 0) return false;
+  if (med.end.isNotEmpty && date.compareTo(med.end) > 0) return false;
+  if (med.days.isNotEmpty) return med.days.contains(DateTime.parse(date).weekday);
+  if (med.intervalDays >= 2 && med.start.isNotEmpty) {
+    DateTime utc(String s) {
+      final d = DateTime.parse(s);
+      return DateTime.utc(d.year, d.month, d.day); // UTC: no daylight-saving hour can shift the day count
+    }
+    return utc(date).difference(utc(med.start)).inDays % med.intervalDays == 0;
+  }
+  return true;
+}
+
 /// All dose slots on [date], sorted by time then medicine name.
 List<DoseItem> itemsFor(AppData d, String date, DateTime now) {
   final out = <DoseItem>[];
   for (final med in d.meds) {
-    if (med.start.isNotEmpty && date.compareTo(med.start) < 0) continue;
-    if (med.end.isNotEmpty && date.compareTo(med.end) > 0) continue;
+    if (!isDueOn(med, date)) continue;
     for (final time in med.times) {
       final key = '${med.id}|$date|$time';
       final log = d.logs[key];

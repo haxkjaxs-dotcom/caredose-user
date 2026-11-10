@@ -18,9 +18,20 @@ bool _validDate(String s) {
   return d != null && dateKey(d) == s;
 }
 
+/// ISO weekdays (1 = Monday ... 7 = Sunday), distinct and sorted; anything else is dropped.
+List<int> sanitizeDays(dynamic v) =>
+    v is List ? (v.whereType<int>().where((d) => d >= 1 && d <= 7).toSet().toList()..sort()) : <int>[];
+
+/// Every-N-days interval: 2..365, otherwise 0 (= not set, i.e. every day).
+int sanitizeInterval(dynamic v) => v is int && v >= 2 && v <= 365 ? v : 0;
+
 class Med {
   final String id, name, dosage, meal, start, end, note, color;
   final List<String> times;
+
+  /// Rule for which days a dose is due (see isDueOn): [days] wins over [intervalDays]; both empty/0 = every day.
+  final List<int> days;
+  final int intervalDays;
   const Med({
     required this.id,
     required this.name,
@@ -31,6 +42,8 @@ class Med {
     this.end = '',
     this.note = '',
     this.color = '#e9b44c',
+    this.days = const [],
+    this.intervalDays = 0,
   });
 
   factory Med.fromJson(Json j) => Med(
@@ -44,11 +57,14 @@ class Med {
         end: _validDate(_str(j['end'])) ? _str(j['end']) : '',
         note: _str(j['note']),
         color: _str(j['color'], '#e9b44c'),
+        days: sanitizeDays(j['days']),
+        intervalDays: sanitizeInterval(j['intervalDays']),
       );
 
   Json toJson() => {
         'id': id, 'name': name, 'dosage': dosage, 'meal': meal, 'times': times,
         'start': start, 'end': end, 'note': note, 'color': color,
+        'days': days, 'intervalDays': intervalDays,
       };
 
   Med copyWith({String? name, String? dosage, String? meal, List<String>? times, String? start, String? end, String? note}) => Med(
@@ -61,6 +77,8 @@ class Med {
         end: end ?? this.end,
         note: note ?? this.note,
         color: color,
+        days: days,
+        intervalDays: intervalDays,
       );
 }
 

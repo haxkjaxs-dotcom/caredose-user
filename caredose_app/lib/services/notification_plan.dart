@@ -41,8 +41,7 @@ List<PlannedNotification> planNotifications(
   for (var offset = 0; offset < maxDays; offset++) {
     final date = dateKey(DateTime(now.year, now.month, now.day + offset));
     for (final med in d.meds) {
-      if (med.start.isNotEmpty && date.compareTo(med.start) < 0) continue;
-      if (med.end.isNotEmpty && date.compareTo(med.end) > 0) continue;
+      if (!isDueOn(med, date)) continue;
       for (final time in med.times) {
         final key = '${med.id}|$date|$time';
         if (d.logs.containsKey(key)) continue;

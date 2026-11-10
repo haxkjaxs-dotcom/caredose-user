@@ -11,6 +11,10 @@ class PlanSchedule {
 class RemotePlan {
   final String id, name, dosage, meal, start, end, note;
   final List<PlanSchedule> schedules;
+
+  /// The plan's day rule (see Med.days / Med.intervalDays); the server writes the same rule on every row of a plan.
+  final List<int> days;
+  final int intervalDays;
   const RemotePlan({
     required this.id,
     required this.name,
@@ -20,6 +24,8 @@ class RemotePlan {
     required this.end,
     required this.note,
     required this.schedules,
+    this.days = const [],
+    this.intervalDays = 0,
   });
 
   factory RemotePlan.fromJson(Json j) {
@@ -27,14 +33,17 @@ class RemotePlan {
     final trade = _s(m['trade_name']);
     final doctorNote = _s(j['doctor_note']);
     final rows = (j['medication_schedules'] is List ? j['medication_schedules'] as List : const []).whereType<Map>().where(
-          // Weekday / interval schedules are not representable in Med.times yet.
-          (r) => r['days_of_week'] == null && r['interval_days'] == null && _s(r['time_of_day']).length >= 5,
+          (r) => _s(r['time_of_day']).length >= 5,
         );
     final byTime = <String, PlanSchedule>{};
+    final rowByTime = <String, Map>{};
     for (final r in rows) {
       final t = _s(r['time_of_day']).substring(0, 5);
       byTime.putIfAbsent(t, () => PlanSchedule(_s(r['id']), t));
+      rowByTime.putIfAbsent(t, () => r);
     }
+    // If rows ever disagree, the earliest time decides (same as the web).
+    final rule = rowByTime.isEmpty ? const <String, dynamic>{} : rowByTime[(rowByTime.keys.toList()..sort()).first]!;
     return RemotePlan(
       id: _s(j['id']),
       name: trade.isNotEmpty ? trade : _s(m['generic_name']),
@@ -44,6 +53,8 @@ class RemotePlan {
       end: _s(j['end_date']),
       note: doctorNote.isNotEmpty ? doctorNote : _s(m['warning']),
       schedules: byTime.values.toList()..sort((a, b) => a.time.compareTo(b.time)),
+      days: sanitizeDays(rule['days_of_week']),
+      intervalDays: sanitizeInterval(rule['interval_days']),
     );
   }
 
@@ -56,6 +67,8 @@ class RemotePlan {
         start: start,
         end: end,
         note: note,
+        days: days,
+        intervalDays: intervalDays,
         // Not String.hashCode: that differs between runs, and the colour must not change.
         color: medColors[id.codeUnits.fold<int>(0, (a, c) => a + c) % medColors.length],
       );

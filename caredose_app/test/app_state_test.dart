@@ -216,7 +216,7 @@ void main() {
   });
 }
 
-RemotePlan _plan(String id, {String time = '08:00', String sid = 's1', String name = 'ยาใหม่'}) => RemotePlan(
+RemotePlan _plan(String id, {String time = '08:00', String sid = 's1', String name = 'ยาใหม่', List<int> days = const []}) => RemotePlan(
       id: id,
       name: name,
       dosage: '1 เม็ด',
@@ -225,6 +225,7 @@ RemotePlan _plan(String id, {String time = '08:00', String sid = 's1', String na
       end: '',
       note: '',
       schedules: [PlanSchedule(sid, time)],
+      days: days,
     );
 
 void applyRemoteTests() {
@@ -244,6 +245,16 @@ void applyRemoteTests() {
       await s.flush();
       expect(sched.calls, 1);
       expect(notified, 0);
+    });
+
+    test('a rule-only change is a change: meds update and reminders are rebuilt', () async {
+      final (s, sched, _) = await make();
+      s.applyRemote(plans: [_plan('p1')], logs: const []);
+      await s.flush();
+      s.applyRemote(plans: [_plan('p1', days: const [1, 3])], logs: const []);
+      await s.flush();
+      expect(s.data.meds.single.days, [1, 3]);
+      expect(sched.calls, 2);
     });
 
     test('a plan missing from the server disappears and the notifications are rebuilt', () async {

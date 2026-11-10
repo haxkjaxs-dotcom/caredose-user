@@ -85,4 +85,16 @@ void main() {
     expect(main.body, 'ยาลดความดัน 1 เม็ด • หลังอาหาร');
     expect(plan.firstWhere((p) => p.isRepeat).title, 'เตือนอีกครั้ง: ยังไม่ได้ทานยา');
   });
+
+  test('a Monday-only med is planned on Mondays only', () {
+    final m = Med(id: '1', name: 'ยา', dosage: '1', times: const ['09:00'], start: '2026-11-01', days: const [1]);
+    final plan = planNotifications(data([m], repeat: false), {}, now);
+    expect(plan.map((p) => p.at), [DateTime(2026, 11, 9, 9), DateTime(2026, 11, 16, 9)]);
+  });
+
+  test('an every-3-days med is planned on due days only', () {
+    final m = Med(id: '1', name: 'ยา', dosage: '1', times: const ['09:00'], start: '2026-11-04', intervalDays: 3);
+    final plan = planNotifications(data([m], repeat: false), {}, now);
+    expect(plan.map((p) => p.at.day), [4, 7, 10, 13, 16]);
+  });
 }
