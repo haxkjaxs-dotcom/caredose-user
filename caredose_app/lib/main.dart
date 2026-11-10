@@ -9,8 +9,10 @@ import 'lifecycle_reloader.dart';
 import 'logic/auth_validators.dart';
 import 'services/log_outbox.dart';
 import 'services/med_sync.dart';
+import 'services/notice_sync.dart';
 import 'services/notification_service.dart';
 import 'services/storage.dart';
+import 'services/supabase_notice_repository.dart';
 import 'services/supabase_med_repository.dart';
 import 'services/supabase_auth_repository.dart';
 import 'state/app_state.dart';
@@ -28,7 +30,9 @@ Future<void> main() async {
   final medRepo = SupabaseMedRepository(Supabase.instance.client);
   final outbox = LogOutbox(prefs, medRepo);
   final state = AppState(Storage(prefs), service, outbox: outbox);
-  final auth = AuthState(
+  late final AuthState auth; // assigned below; NoticeSync only reads it lazily
+  final noticeSync = NoticeSync(SupabaseNoticeRepository(Supabase.instance.client), service, prefs, canPull: () => auth.status == AuthStatus.ready);
+  auth = AuthState(
     SupabaseAuthRepository(Supabase.instance.client),
     prefs,
     // A fresh sign-in fills the local name/phone; signing out (or another person logging in) wipes local data.
@@ -40,6 +44,8 @@ Future<void> main() async {
     beforeSignOut: outbox.flush,
     onSignedOut: () {
       outbox.clear(); // synchronous in memory, so nothing of the old user is left when resetAll starts
+      noticeSync.stop();
+      noticeSync.clearShown();
       state.resetAll();
     },
   );
@@ -62,8 +68,11 @@ Future<void> main() async {
     if (ready) {
       medSync.pull();
       medSync.start();
+      noticeSync.pull();
+      noticeSync.start();
     } else {
       medSync.stop();
+      noticeSync.stop();
     }
   }
 
@@ -74,6 +83,7 @@ Future<void> main() async {
       ChangeNotifierProvider.value(value: auth),
       Provider<NotificationPermissions>.value(value: service),
       Provider<MedSync>.value(value: medSync),
+      Provider<NoticeSync>.value(value: noticeSync),
       Provider<LogOutbox>.value(value: outbox),
     ],
     child: const LifecycleReloader(child: CareDoseApp()),

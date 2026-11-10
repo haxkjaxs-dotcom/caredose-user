@@ -5,6 +5,8 @@ import 'package:caredose/logic/auth_validators.dart';
 import 'package:caredose/logic/thai_date.dart';
 import 'package:caredose/models/models.dart';
 import 'package:caredose/services/log_outbox.dart';
+import 'package:caredose/services/notice_repository.dart';
+import 'package:caredose/services/notice_sync.dart';
 import 'package:caredose/services/storage.dart';
 import 'package:caredose/state/app_state.dart';
 import 'package:caredose/state/auth_state.dart';
@@ -15,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fake_auth_repository.dart';
 import 'fake_med_repository.dart';
+import 'fake_notice_repository.dart';
 
 class FakeScheduler implements NotificationScheduler {
   int calls = 0;
@@ -83,6 +86,13 @@ late AuthState lastAuth;
 late FakeAuthRepository lastAuthRepo;
 late LogOutbox lastOutbox;
 late FakeMedRepository lastMedRepo;
+late FakeNoticeRepository lastNoticeRepo;
+late NoticeSync lastNoticeSync;
+
+class _NoDisplay implements NoticeDisplay {
+  @override
+  Future<void> show(int id, String title, String body) async {}
+}
 
 /// Pumps the whole app on a 360x800 phone-sized screen. By default the user is already
 /// signed in with a profile, so tests land on the main app; pass [signedIn]=false for the login flow.
@@ -95,6 +105,8 @@ Future<AppState> pumpApp(WidgetTester tester, {AppState? state, FakePermissions?
   final prefs = await SharedPreferences.getInstance();
   lastMedRepo = FakeMedRepository();
   lastOutbox = LogOutbox(prefs, lastMedRepo);
+  lastNoticeRepo = FakeNoticeRepository();
+  lastNoticeSync = NoticeSync(lastNoticeRepo, _NoDisplay(), prefs);
   // Same wiring as main(): a fresh sign-in fills the local name/phone; sign out flushes, then wipes local data.
   lastAuth = AuthState(
     lastAuthRepo,
@@ -106,6 +118,7 @@ Future<AppState> pumpApp(WidgetTester tester, {AppState? state, FakePermissions?
     beforeSignOut: lastOutbox.flush,
     onSignedOut: () async {
       await lastOutbox.clear();
+      await lastNoticeSync.clearShown();
       await s.resetAll();
     },
   );
@@ -116,6 +129,7 @@ Future<AppState> pumpApp(WidgetTester tester, {AppState? state, FakePermissions?
       ChangeNotifierProvider<AuthState>.value(value: lastAuth),
       Provider<NotificationPermissions>.value(value: permissions ?? FakePermissions()),
       Provider<LogOutbox>.value(value: lastOutbox),
+      Provider<NoticeSync>.value(value: lastNoticeSync),
     ],
     child: const CareDoseApp(),
   ));

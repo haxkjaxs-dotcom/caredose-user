@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
 import 'services/med_sync.dart';
+import 'services/notice_sync.dart';
 import 'state/app_state.dart';
 
 /// Re-reads storage (notification buttons may have written to it) when the app
@@ -32,6 +33,7 @@ class _LifecycleReloaderState extends State<LifecycleReloader> with WidgetsBindi
     if (state != AppLifecycleState.resumed) return;
     context.read<AppState>().reload();
     context.read<MedSync>().pull();
+    context.read<NoticeSync>().pull();
   }
 
   @override

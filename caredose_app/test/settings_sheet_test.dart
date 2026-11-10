@@ -4,6 +4,7 @@ import 'package:caredose/state/auth_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'fake_notice_repository.dart';
 import 'helpers.dart';
 
 Future<void> openSettings(WidgetTester tester) async {
@@ -12,6 +13,16 @@ Future<void> openSettings(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('the settings sheet opens the admin message inbox', (tester) async {
+    await pumpApp(tester);
+    lastNoticeRepo.recent = [notice('1', title: 'นัดตรวจพรุ่งนี้', body: 'มาก่อน 9 โมง')];
+    await openSettings(tester);
+    await tapVisible(tester, find.widgetWithText(OutlinedButton, 'ข้อความจากผู้ดูแล'));
+    expect(find.text('นัดตรวจพรุ่งนี้'), findsOneWidget);
+    expect(find.text('มาก่อน 9 โมง'), findsOneWidget);
+    await disposeApp(tester);
+  });
+
   testWidgets('choosing the largest font size updates the setting', (tester) async {
     final s = await pumpApp(tester);
     await openSettings(tester);

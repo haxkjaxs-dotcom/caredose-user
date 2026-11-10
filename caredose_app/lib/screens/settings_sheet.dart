@@ -5,6 +5,7 @@ import '../services/log_outbox.dart';
 import '../state/app_state.dart';
 import '../state/auth_state.dart';
 import '../theme.dart';
+import 'notices_screen.dart';
 import '../widgets/common.dart';
 
 /// Body of the settings bottom sheet (opened with `showAppSheet`).
@@ -194,6 +195,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
       ),
       const SizedBox(height: 20),
       OutlinedButton(style: dangerStyle(), onPressed: _reset, child: const Text('จัดการข้อมูลในเครื่อง: ล้างข้อมูล')),
+      const SizedBox(height: 20),
+      OutlinedButton(
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const NoticesScreen())),
+        child: const Text('ข้อความจากผู้ดูแล'),
+      ),
       const SizedBox(height: 20),
       OutlinedButton(style: dangerStyle(), onPressed: _signOut, child: const Text('ออกจากระบบ')),
       const SizedBox(height: 20),
