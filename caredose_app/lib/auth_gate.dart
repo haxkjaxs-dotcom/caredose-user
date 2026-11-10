@@ -27,6 +27,8 @@ class AuthGate extends StatelessWidget {
             const Text('เชื่อมต่อไม่ได้ กรุณาลองใหม่', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             FilledButton(onPressed: auth.init, child: const Text('ลองใหม่')),
+            // Without this a persistent server error (e.g. a missing RPC) leaves no way back to the login screen.
+            TextButton(onPressed: auth.signOut, child: const Text('ออกจากระบบ')),
           ]),
         ));
       case AuthStatus.loggedOut:
