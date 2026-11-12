@@ -9,6 +9,7 @@ class PlannedNotification {
   final String body;
   final String payload; // dose log key
   final bool isRepeat;
+  final bool isEarly; // heads-up before the dose time
   const PlannedNotification({
     required this.id,
     required this.at,
@@ -16,6 +17,7 @@ class PlannedNotification {
     required this.body,
     required this.payload,
     required this.isRepeat,
+    this.isEarly = false,
   });
 }
 
@@ -28,6 +30,12 @@ int notificationId(String key, {required bool repeat}) {
   }
   return (h & 0x3fffffff) * 2 + (repeat ? 1 : 0);
 }
+
+/// Id of the heads-up for a dose: hashed from a distinct string so it never meets the main or repeat id.
+int earlyNotificationId(String key) => notificationId('$key|early', repeat: false);
+
+/// How long before the dose time the heads-up fires.
+const earlyLead = Duration(minutes: 10);
 
 List<PlannedNotification> planNotifications(
   AppData d,
@@ -47,6 +55,17 @@ List<PlannedNotification> planNotifications(
         if (d.logs.containsKey(key)) continue;
         final at = doseTime(date, time);
         final body = '${med.name} ${med.dosage}${med.meal.isEmpty ? '' : ' • ${med.meal}'}';
+        final earlyAt = at.subtract(earlyLead);
+        if (earlyAt.isAfter(now)) {
+          out.add(PlannedNotification(
+              id: earlyNotificationId(key),
+              at: earlyAt,
+              title: 'อีก ${earlyLead.inMinutes} นาทีถึงเวลาทานยา',
+              body: body,
+              payload: key,
+              isRepeat: false,
+              isEarly: true));
+        }
         if (at.isAfter(now)) {
           out.add(PlannedNotification(
               id: notificationId(key, repeat: false), at: at, title: 'ถึงเวลาทานยา', body: body, payload: key, isRepeat: false));

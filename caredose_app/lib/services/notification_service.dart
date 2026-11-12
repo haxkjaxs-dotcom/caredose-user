@@ -34,7 +34,9 @@ Future<void> notificationBackgroundHandler(NotificationResponse r) async {
   // Queue only: AppState is the single writer of the main data and applies this on its next save/reload.
   final storage = Storage(await SharedPreferences.getInstance());
   await storage.appendPending('$action\t$key\t${DateTime.now().toIso8601String()}');
-  await FlutterLocalNotificationsPlugin().cancel(id: notificationId(key, repeat: true));
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin.cancel(id: notificationId(key, repeat: true));
+  await plugin.cancel(id: earlyNotificationId(key));
 }
 
 class NotificationService implements NotificationScheduler, NotificationPermissions, NoticeDisplay {
@@ -114,6 +116,19 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
         iOS: const DarwinNotificationDetails(categoryIdentifier: _iosCategory, presentAlert: true, presentSound: true),
       );
 
+  /// The heads-up before a dose: no buttons, the dose is not due yet.
+  NotificationDetails _earlyDetails() => const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          'แจ้งเตือนทานยา',
+          channelDescription: 'แจ้งเตือนเมื่อถึงเวลาทานยา',
+          importance: Importance.max,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.reminder,
+        ),
+        iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+      );
+
   /// An admin message, shown right away (no dose buttons).
   @override
   Future<bool> show(int id, String title, String body) async {
@@ -161,6 +176,7 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
     final exact = await _android?.canScheduleExactNotifications() ?? true;
     final mode = exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexactAllowWhileIdle;
     final details = _details();
+    final earlyDetails = _earlyDetails();
     for (final p in plan) {
       try {
         await _plugin.zonedSchedule(
@@ -168,7 +184,7 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
           title: p.title,
           body: p.body,
           scheduledDate: tz.TZDateTime.from(p.at, tz.local),
-          notificationDetails: details,
+          notificationDetails: p.isEarly ? earlyDetails : details,
           androidScheduleMode: mode,
           payload: p.payload,
         );

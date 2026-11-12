@@ -8,13 +8,16 @@ Med med(String id, List<String> times, {String start = '2026-11-01', String end 
 AppData data(List<Med> meds, {bool repeat = true, bool notify = true, Map<String, DoseLog> logs = const {}}) =>
     AppData(meds: meds, repeatReminder: repeat, notify: notify, logs: logs);
 
+/// The at-dose-time notifications only (no early, no repeat).
+List<PlannedNotification> mains(List<PlannedNotification> plan) => plan.where((p) => !p.isRepeat && !p.isEarly).toList();
+
 void main() {
   final now = DateTime(2026, 11, 4, 8, 0, 10);
 
   test('dose that just passed is not scheduled but later days are', () {
     final plan = planNotifications(data([med('1', ['08:00'])], repeat: false), {}, now);
     expect(plan.any((p) => p.at == DateTime(2026, 11, 4, 8)), false);
-    expect(plan.first.at, DateTime(2026, 11, 5, 8));
+    expect(mains(plan).first.at, DateTime(2026, 11, 5, 8));
   });
 
   test('repeat reminder of a just-passed dose is still scheduled', () {
@@ -26,7 +29,7 @@ void main() {
 
   test('med starting tomorrow has nothing today; ended med has nothing', () {
     final future = planNotifications(data([med('1', ['09:00'], start: '2026-11-05')], repeat: false), {}, now);
-    expect(future.first.at, DateTime(2026, 11, 5, 9));
+    expect(mains(future).first.at, DateTime(2026, 11, 5, 9));
     final ended = planNotifications(data([med('1', ['09:00'], end: '2026-11-03')]), {}, now);
     expect(ended, isEmpty);
   });
@@ -50,7 +53,7 @@ void main() {
   test('dismissed key loses its repeat but not later days', () {
     final plan = planNotifications(data([med('1', ['09:00'])]), {'1|2026-11-04|09:00'}, now);
     expect(plan.any((p) => p.isRepeat && p.payload == '1|2026-11-04|09:00'), false);
-    expect(plan.any((p) => !p.isRepeat && p.payload == '1|2026-11-04|09:00'), true);
+    expect(plan.any((p) => !p.isRepeat && !p.isEarly && p.payload == '1|2026-11-04|09:00'), true);
     expect(plan.any((p) => p.isRepeat && p.payload == '1|2026-11-05|09:00'), true);
   });
 
@@ -64,8 +67,8 @@ void main() {
 
   test('window is 14 days', () {
     final plan = planNotifications(data([med('1', ['09:00'])], repeat: false), {}, now);
-    expect(plan.length, 14);
-    expect(plan.last.at, DateTime(2026, 11, 17, 9));
+    expect(mains(plan).length, 14);
+    expect(mains(plan).last.at, DateTime(2026, 11, 17, 9));
   });
 
   test('two meds at same time get distinct ids; ids are stable', () {
@@ -75,26 +78,51 @@ void main() {
     expect(notificationId(k, repeat: false), notificationId(k, repeat: false));
     expect(notificationId(k, repeat: false), isNot(notificationId(k, repeat: true)));
     expect(notificationId(k, repeat: true) <= 0x7fffffff, true);
+    expect(earlyNotificationId(k), isNot(notificationId(k, repeat: false)));
+    expect(earlyNotificationId(k), isNot(notificationId(k, repeat: true)));
+    expect(earlyNotificationId(k) <= 0x7fffffff, true);
   });
 
   test('title and body', () {
     final plan = planNotifications(
         data([med('1', ['09:00'], name: 'ยาลดความดัน', meal: 'หลังอาหาร')]), {}, now);
-    final main = plan.firstWhere((p) => !p.isRepeat);
+    final main = mains(plan).first;
     expect(main.title, 'ถึงเวลาทานยา');
     expect(main.body, 'ยาลดความดัน 1 เม็ด • หลังอาหาร');
     expect(plan.firstWhere((p) => p.isRepeat).title, 'เตือนอีกครั้ง: ยังไม่ได้ทานยา');
   });
 
+  test('every dose gets a heads-up 10 minutes before, even with repeat off', () {
+    final plan = planNotifications(data([med('1', ['09:00'], name: 'ยาลดความดัน', meal: 'หลังอาหาร')], repeat: false), {}, now);
+    final early = plan.firstWhere((p) => p.isEarly && p.payload == '1|2026-11-04|09:00');
+    expect(early.at, DateTime(2026, 11, 4, 8, 50));
+    expect(early.title, 'อีก 10 นาทีถึงเวลาทานยา');
+    expect(early.body, 'ยาลดความดัน 1 เม็ด • หลังอาหาร');
+    expect(early.isRepeat, false);
+    expect(early.id, earlyNotificationId('1|2026-11-04|09:00'));
+  });
+
+  test('no heads-up once the dose is less than 10 minutes away', () {
+    final plan = planNotifications(data([med('1', ['09:00'])]), {}, DateTime(2026, 11, 4, 8, 55));
+    expect(plan.any((p) => p.isEarly && p.payload == '1|2026-11-04|09:00'), false);
+    expect(plan.any((p) => !p.isRepeat && !p.isEarly && p.payload == '1|2026-11-04|09:00'), true);
+    expect(plan.any((p) => p.isEarly && p.payload == '1|2026-11-05|09:00'), true);
+  });
+
+  test('a dose at 00:05 gets its heads-up on the previous evening', () {
+    final plan = planNotifications(data([med('1', ['00:05'])], repeat: false), {}, now);
+    expect(plan.any((p) => p.isEarly && p.at == DateTime(2026, 11, 4, 23, 55)), true);
+  });
+
   test('a Monday-only med is planned on Mondays only', () {
     final m = Med(id: '1', name: 'ยา', dosage: '1', times: const ['09:00'], start: '2026-11-01', days: const [1]);
     final plan = planNotifications(data([m], repeat: false), {}, now);
-    expect(plan.map((p) => p.at), [DateTime(2026, 11, 9, 9), DateTime(2026, 11, 16, 9)]);
+    expect(mains(plan).map((p) => p.at), [DateTime(2026, 11, 9, 9), DateTime(2026, 11, 16, 9)]);
   });
 
   test('an every-3-days med is planned on due days only', () {
     final m = Med(id: '1', name: 'ยา', dosage: '1', times: const ['09:00'], start: '2026-11-04', intervalDays: 3);
     final plan = planNotifications(data([m], repeat: false), {}, now);
-    expect(plan.map((p) => p.at.day), [4, 7, 10, 13, 16]);
+    expect(mains(plan).map((p) => p.at.day), [4, 7, 10, 13, 16]);
   });
 }

@@ -119,10 +119,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ]),
           const SizedBox(height: 12),
           LabeledField(
-            'โรคอื่น ๆ (คั่นด้วยเครื่องหมายจุลภาค)',
+            'โรคอื่น ๆ (หากไม่มีไม่ต้องใส่)',
             child: TextField(
               key: const ValueKey('other-conditions'),
               controller: other,
+              decoration: const InputDecoration(hintText: 'หลายโรคให้คั่นด้วยเครื่องหมายจุลภาค'),
               onChanged: (v) {
                 if (v.trim().isNotEmpty && none) setState(() => none = false);
               },
