@@ -101,6 +101,40 @@ void main() {
     expect(s.data.relatives, isEmpty);
   });
 
+  test('after reset, a pull still in flight from the previous user is dropped and the next user can pull', () async {
+    final s = await makeState();
+    s.applyRelatives(const []);
+    final gate = Completer<void>();
+    final repo = FakeRelativeRepository()
+      ..server = [const Relative(id: 'a1', name: 'ของ A', phone: '1')]
+      ..gate = gate;
+    final sync = RelativeSync(repo, s);
+    final first = sync.pull(); // user A: reads A's list, then waits
+    await Future<void>.delayed(Duration.zero);
+    sync.reset(); // A signs out
+    repo.server = [const Relative(id: 'b1', name: 'ของ B', phone: '2')];
+    repo.gate = null;
+    await sync.pull(); // B signs in: must not be skipped because A's pull is still running
+    expect(s.data.relatives.map((r) => r.id), ['b1']);
+    gate.complete();
+    await first;
+    expect(s.data.relatives.map((r) => r.id), ['b1'], reason: "A's late answer must not replace B's list");
+  });
+
+  test('a save that finishes after reset does not write into the next copy', () async {
+    final s = await makeState();
+    s.applyRelatives(const []);
+    final saveGate = Completer<void>();
+    final repo = FakeRelativeRepository()..saveGate = saveGate;
+    final sync = RelativeSync(repo, s);
+    final save = sync.save(name: 'ก', rel: '', phone: '1');
+    await Future<void>.delayed(Duration.zero);
+    sync.reset();
+    saveGate.complete();
+    await save;
+    expect(s.data.relatives, isEmpty);
+  });
+
   test('a pull that was in flight while the user saved does not wipe the saved relative', () async {
     final s = await makeState();
     s.applyRelatives(const []);

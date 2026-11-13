@@ -40,6 +40,8 @@ class ContactsScreen extends StatelessWidget {
         onSave: (v) async {
           final bad = validateRelative(name: v['name']!, rel: v['rel']!, phone: v['phone']!);
           if (bad != null) return bad;
+          // the server counts every live relative, the Admin's too, and refuses the 21st
+          if (r == null && context.read<AppState>().data.relatives.length >= 20) return 'เพิ่มญาติได้ไม่เกิน 20 คน';
           try {
             await sync.save(id: r?.id, name: v['name']!, rel: v['rel']!, phone: v['phone']!);
           } on AuthFailure catch (f) {

@@ -88,6 +88,20 @@ void main() {
     await disposeApp(tester);
   });
 
+  testWidgets('the 21st relative is refused with the reason, without calling the server', (tester) async {
+    final s = await pumpApp(tester);
+    s.applyRelatives([for (var i = 1; i <= 20; i++) Relative(id: 'u$i', name: 'ญาติ $i', phone: '08$i')]);
+    await openContacts(tester);
+    await tapVisible(tester, find.text('+ เพิ่มญาติ'));
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'คนที่ 21');
+    await tester.enterText(fields.at(2), '0899999999');
+    await tapVisible(tester, find.widgetWithText(FilledButton, 'บันทึก'));
+    expect(find.text('เพิ่มญาติได้ไม่เกิน 20 คน'), findsOneWidget);
+    expect(lastRelativeRepo.saveCalls, 0);
+    await disposeApp(tester);
+  });
+
   testWidgets('a relative an Admin added can be called but not edited', (tester) async {
     final s = await pumpApp(tester);
     s.applyRelatives(const [Relative(id: 'u9', name: 'พี่หมอ', rel: 'พี่', phone: '0811111111', editable: false)]);

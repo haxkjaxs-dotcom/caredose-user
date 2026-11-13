@@ -10,6 +10,8 @@ class FakeRelativeRepository implements RelativeRepository {
 
   /// When set, fetch waits for it (to hold a pull open). The list it returns is the one from before the wait.
   Completer<void>? gate;
+  /// When set, save waits for it (to finish a save after something else happened).
+  Completer<void>? saveGate;
   int fetchCalls = 0, saveCalls = 0, deleteCalls = 0;
   final saved = <({String? id, String name, String rel, String phone})>[];
   final deleted = <String>[];
@@ -28,6 +30,7 @@ class FakeRelativeRepository implements RelativeRepository {
   Future<String> save({String? id, required String name, required String rel, required String phone}) async {
     saveCalls++;
     if (failure != null) throw failure!;
+    if (saveGate != null) await saveGate!.future;
     saved.add((id: id, name: name, rel: rel, phone: phone));
     final rid = id ?? 'u${++_n}';
     final r = Relative(id: rid, name: name, rel: rel, phone: phone);

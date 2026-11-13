@@ -34,6 +34,7 @@ Future<void> main() async {
   final state = AppState(Storage(prefs), service, outbox: outbox);
   late final AuthState auth; // assigned below; NoticeSync only reads it lazily
   final noticeSync = NoticeSync(SupabaseNoticeRepository(Supabase.instance.client), service, prefs, canPull: () => auth.status == AuthStatus.ready);
+  final relativeSync = RelativeSync(SupabaseRelativeRepository(Supabase.instance.client), state, canPull: () => auth.status == AuthStatus.ready);
   auth = AuthState(
     SupabaseAuthRepository(Supabase.instance.client),
     prefs,
@@ -48,12 +49,12 @@ Future<void> main() async {
       outbox.clear(); // synchronous in memory, so nothing of the old user is left when resetAll starts
       noticeSync.stop();
       noticeSync.clearShown();
+      relativeSync.reset();
       state.resetAll();
     },
   );
   await auth.init();
   // pull() flushes the outbox first (beforePull), so startup, resume and the 5-minute timer all retry unsent records.
-  final relativeSync = RelativeSync(SupabaseRelativeRepository(Supabase.instance.client), state, canPull: () => auth.status == AuthStatus.ready);
   // Relatives ride on the plan pull: login, resume and the 5-minute timer all refresh them too.
   final medSync = MedSync(medRepo, state, canPull: () => auth.status == AuthStatus.ready, beforePull: outbox.flush, onPulled: relativeSync.pull);
 
