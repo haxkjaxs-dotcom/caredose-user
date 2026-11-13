@@ -11,6 +11,22 @@ void main() {
     expect(b.toJson(), a.toJson());
   });
 
+  test('Relative from old local data has no editable key and stays editable', () {
+    final r = Relative.fromJson({'id': 'x', 'name': 'a', 'rel': 'b', 'phone': '1'});
+    expect(r.editable, true);
+  });
+
+  test('Relative round-trips editable through JSON', () {
+    const r = Relative(id: 'x', name: 'a', rel: 'b', phone: '1', editable: false);
+    expect(Relative.fromJson(r.toJson()).editable, false);
+  });
+
+  test('Relative.fromServer reads the relationship column', () {
+    final r = Relative.fromServer({'id': 'u1', 'name': 'ก', 'relationship': 'ลูก', 'phone': '081', 'editable': false});
+    expect((r.id, r.name, r.rel, r.phone, r.editable), ('u1', 'ก', 'ลูก', '081', false));
+    expect(Relative.fromServer({'id': 'u2', 'name': 'ข', 'relationship': null, 'phone': null, 'editable': true}).rel, '');
+  });
+
   test('seed is empty defaults', () {
     final d = AppData.seed(now);
     expect(d.patient, '');

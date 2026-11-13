@@ -88,6 +88,29 @@ void main() {
     expect(s.data.relatives.map((r) => r.id), ['r1']);
   });
 
+  test('applyRelatives replaces the whole local list with the server list', () async {
+    final (s, _, _) = await make();
+    expect(s.data.relatives.map((r) => r.id), ['r1']);
+    s.applyRelatives(const [
+      Relative(id: 'u1', name: 'ก', rel: 'ลูก', phone: '081'),
+      Relative(id: 'u2', name: 'ข', rel: 'พี่', phone: '082', editable: false),
+    ]);
+    expect(s.data.relatives.map((r) => r.id), ['u1', 'u2']);
+    expect(s.data.relatives.last.editable, false);
+    s.applyRelatives(const []);
+    expect(s.data.relatives, isEmpty);
+  });
+
+  test('applyRelatives with an unchanged list does not notify', () async {
+    final (s, _, _) = await make();
+    const list = [Relative(id: 'u1', name: 'ก', rel: 'ลูก', phone: '081')];
+    s.applyRelatives(list);
+    var n = 0;
+    s.addListener(() => n++);
+    s.applyRelatives(const [Relative(id: 'u1', name: 'ก', rel: 'ลูก', phone: '081')]);
+    expect(n, 0);
+  });
+
   test('addBmi puts newest first', () async {
     final (s, _, _) = await make();
     s.addBmi(58, 155);

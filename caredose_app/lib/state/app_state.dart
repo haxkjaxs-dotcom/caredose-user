@@ -216,6 +216,13 @@ class AppState extends ChangeNotifier {
     _commit(data.copyWith(relatives: exists ? [for (final x in data.relatives) x.id == r.id ? r : x] : [...data.relatives, r]));
   }
 
+  /// The server list is the truth: it replaces the local copy (nothing is committed when it is the same).
+  void applyRelatives(List<Relative> server) {
+    String sig(List<Relative> l) => jsonEncode(l.map((r) => r.toJson()).toList());
+    if (sig(server) == sig(data.relatives)) return;
+    _commit(data.copyWith(relatives: server));
+  }
+
   void deleteRelative(String id) => _commit(data.copyWith(relatives: data.relatives.where((r) => r.id != id).toList()));
 
   void addBmi(double w, double h) {

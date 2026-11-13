@@ -100,10 +100,17 @@ class Doctor {
 
 class Relative {
   final String id, name, rel, phone;
-  const Relative({required this.id, required this.name, this.rel = '', this.phone = ''});
-  factory Relative.fromJson(Json j) =>
-      Relative(id: _str(j['id']), name: _str(j['name']), rel: _str(j['rel']), phone: _str(j['phone']));
-  Json toJson() => {'id': id, 'name': name, 'rel': rel, 'phone': phone};
+
+  /// False for a relative an Admin added: the patient sees and calls them but cannot change them.
+  final bool editable;
+  const Relative({required this.id, required this.name, this.rel = '', this.phone = '', this.editable = true});
+  factory Relative.fromJson(Json j) => Relative(
+      id: _str(j['id']), name: _str(j['name']), rel: _str(j['rel']), phone: _str(j['phone']), editable: j['editable'] != false);
+
+  /// A row of `list_my_relatives()`: the relationship column is `relationship`.
+  factory Relative.fromServer(Json j) => Relative(
+      id: _str(j['id']), name: _str(j['name']), rel: _str(j['relationship']), phone: _str(j['phone']), editable: j['editable'] == true);
+  Json toJson() => {'id': id, 'name': name, 'rel': rel, 'phone': phone, 'editable': editable};
 }
 
 class Appt {
