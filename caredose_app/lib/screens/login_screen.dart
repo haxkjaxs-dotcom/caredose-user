@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../logic/auth_validators.dart';
@@ -56,7 +57,9 @@ class _LoginScreenState extends State<LoginScreen> {
       padding: const EdgeInsets.all(16),
       child: AppCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const SectionTitle('เข้าสู่ระบบ'),
+          Center(child: Image.asset('assets/images/logo.png', height: 180, semanticLabel: 'CareDose ยาอุ่นใจ')),
+          const SizedBox(height: 8),
+          const Center(child: SectionTitle('เข้าสู่ระบบ')),
           const Text('กรอกเบอร์มือถือเพื่อรับรหัส OTP ยืนยันตัวตน', style: TextStyle(fontSize: 14, color: stone600)),
           const SizedBox(height: 16),
           LabeledField(
@@ -65,6 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
               key: const ValueKey('phone'),
               controller: phone,
               keyboardType: TextInputType.phone,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(hintText: 'เช่น 0812345678'),
               onSubmitted: (_) => _submit(),
             ),

@@ -28,6 +28,19 @@ Future<void> unmount(WidgetTester tester) => tester.pumpWidget(const SizedBox())
 
 void main() {
   group('LoginScreen', () {
+    testWidgets('the phone field takes digits only', (tester) async {
+      await pumpScreen(tester, LoginScreen(onCodeSent: (_) {}));
+      await tester.enterText(find.byKey(const ValueKey('phone')), '08a1-2 3+4ก5678');
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('phone'))).controller!.text, '0812345678');
+      await unmount(tester);
+    });
+
+    testWidgets('shows the CareDose logo', (tester) async {
+      await pumpScreen(tester, LoginScreen(onCodeSent: (_) {}));
+      expect(find.bySemanticsLabel('CareDose ยาอุ่นใจ'), findsOneWidget);
+      await unmount(tester);
+    });
+
     testWidgets('rejects a bad number without calling the backend', (tester) async {
       final (_, repo) = await pumpScreen(tester, LoginScreen(onCodeSent: (_) {}));
       await tester.enterText(find.byKey(const ValueKey('phone')), '12345');

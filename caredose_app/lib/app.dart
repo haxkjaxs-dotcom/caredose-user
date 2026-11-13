@@ -9,12 +9,16 @@ import 'screens/contacts_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/settings_sheet.dart';
+import 'screens/welcome_splash.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 import 'widgets/common.dart';
 
 class CareDoseApp extends StatelessWidget {
-  const CareDoseApp({super.key});
+  const CareDoseApp({super.key, this.showWelcome = false});
+
+  /// The opening "ยินดีต้อนรับ" screen; only main turns it on, so widget tests reach the app at once.
+  final bool showWelcome;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +31,7 @@ class CareDoseApp extends StatelessWidget {
         data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScaleFor(size))),
         child: child!,
       ),
-      home: const AuthGate(child: _Shell()),
+      home: showWelcome ? const WelcomeSplash(child: AuthGate(child: _Shell())) : const AuthGate(child: _Shell()),
     );
   }
 }

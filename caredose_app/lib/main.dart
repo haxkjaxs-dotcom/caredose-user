@@ -91,7 +91,7 @@ Future<void> main() async {
       Provider<NoticeSync>.value(value: noticeSync),
       Provider<LogOutbox>.value(value: outbox),
     ],
-    child: const LifecycleReloader(child: CareDoseApp()),
+    child: const LifecycleReloader(child: CareDoseApp(showWelcome: true)),
   ));
   syncReminders(); // after runApp so the UI shows before any permission dialog
 }
