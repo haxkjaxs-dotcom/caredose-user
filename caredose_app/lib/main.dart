@@ -11,8 +11,10 @@ import 'services/log_outbox.dart';
 import 'services/med_sync.dart';
 import 'services/notice_sync.dart';
 import 'services/notification_service.dart';
+import 'services/relative_sync.dart';
 import 'services/storage.dart';
 import 'services/supabase_notice_repository.dart';
+import 'services/supabase_relative_repository.dart';
 import 'services/supabase_med_repository.dart';
 import 'services/supabase_auth_repository.dart';
 import 'state/app_state.dart';
@@ -51,7 +53,9 @@ Future<void> main() async {
   );
   await auth.init();
   // pull() flushes the outbox first (beforePull), so startup, resume and the 5-minute timer all retry unsent records.
-  final medSync = MedSync(medRepo, state, canPull: () => auth.status == AuthStatus.ready, beforePull: outbox.flush);
+  final relativeSync = RelativeSync(SupabaseRelativeRepository(Supabase.instance.client), state, canPull: () => auth.status == AuthStatus.ready);
+  // Relatives ride on the plan pull: login, resume and the 5-minute timer all refresh them too.
+  final medSync = MedSync(medRepo, state, canPull: () => auth.status == AuthStatus.ready, beforePull: outbox.flush, onPulled: relativeSync.pull);
 
   // Reminders (and the notification permission prompt) only exist while a user is signed in.
   var notificationsStarted = false;
@@ -89,6 +93,7 @@ Future<void> main() async {
       Provider<NotificationPermissions>.value(value: service),
       Provider<MedSync>.value(value: medSync),
       Provider<NoticeSync>.value(value: noticeSync),
+      Provider<RelativeSync>.value(value: relativeSync),
       Provider<LogOutbox>.value(value: outbox),
     ],
     child: const LifecycleReloader(child: CareDoseApp(showWelcome: true)),

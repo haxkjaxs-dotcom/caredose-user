@@ -7,6 +7,7 @@ import 'package:caredose/models/models.dart';
 import 'package:caredose/services/log_outbox.dart';
 import 'package:caredose/services/notice_repository.dart';
 import 'package:caredose/services/notice_sync.dart';
+import 'package:caredose/services/relative_sync.dart';
 import 'package:caredose/services/storage.dart';
 import 'package:caredose/state/app_state.dart';
 import 'package:caredose/state/auth_state.dart';
@@ -18,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'fake_auth_repository.dart';
 import 'fake_med_repository.dart';
 import 'fake_notice_repository.dart';
+import 'fake_relative_repository.dart';
 
 class FakeScheduler implements NotificationScheduler {
   int calls = 0;
@@ -88,6 +90,7 @@ late LogOutbox lastOutbox;
 late FakeMedRepository lastMedRepo;
 late FakeNoticeRepository lastNoticeRepo;
 late NoticeSync lastNoticeSync;
+late FakeRelativeRepository lastRelativeRepo;
 
 class _NoDisplay implements NoticeDisplay {
   @override
@@ -107,6 +110,7 @@ Future<AppState> pumpApp(WidgetTester tester, {AppState? state, FakePermissions?
   lastOutbox = LogOutbox(prefs, lastMedRepo);
   lastNoticeRepo = FakeNoticeRepository();
   lastNoticeSync = NoticeSync(lastNoticeRepo, _NoDisplay(), prefs);
+  lastRelativeRepo = FakeRelativeRepository();
   // Same wiring as main(): a fresh sign-in fills the local name/phone; sign out flushes, then wipes local data.
   lastAuth = AuthState(
     lastAuthRepo,
@@ -130,6 +134,7 @@ Future<AppState> pumpApp(WidgetTester tester, {AppState? state, FakePermissions?
       Provider<NotificationPermissions>.value(value: permissions ?? FakePermissions()),
       Provider<LogOutbox>.value(value: lastOutbox),
       Provider<NoticeSync>.value(value: lastNoticeSync),
+      Provider<RelativeSync>.value(value: RelativeSync(lastRelativeRepo, s)),
     ],
     child: const CareDoseApp(),
   ));

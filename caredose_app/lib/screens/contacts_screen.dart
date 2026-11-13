@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../logic/auth_validators.dart';
 import '../logic/dose_items.dart';
 import '../logic/thai_date.dart';
 import '../models/models.dart';
+import '../services/auth_repository.dart';
+import '../services/relative_sync.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -26,26 +29,36 @@ class ContactsScreen extends StatelessWidget {
   const ContactsScreen({super.key});
 
   void _openRelative(BuildContext context, Relative? r) {
-    final s = context.read<AppState>();
+    final sync = context.read<RelativeSync>();
     showAppSheet<void>(
       context,
       title: r == null ? 'เพิ่มญาติ' : 'แก้ไขญาติ',
       builder: (ctx) => PersonForm(
         fields: const [('name', 'ชื่อ'), ('rel', 'ความสัมพันธ์'), ('phone', 'เบอร์โทร')],
-        initial: r == null
-            ? {'id': DateTime.now().microsecondsSinceEpoch.toRadixString(36), 'name': '', 'rel': '', 'phone': ''}
-            : {'id': r.id, 'name': r.name, 'rel': r.rel, 'phone': r.phone},
-        onSave: (v) {
-          s.saveRelative(Relative(id: v['id']!, name: v['name']!, rel: v['rel']!, phone: v['phone']!));
-          Navigator.pop(ctx);
+        initial: r == null ? {'id': '', 'name': '', 'rel': '', 'phone': ''} : {'id': r.id, 'name': r.name, 'rel': r.rel, 'phone': r.phone},
+        // Needs the network: the form stays open with the reason when the server says no.
+        onSave: (v) async {
+          final bad = validateRelative(name: v['name']!, rel: v['rel']!, phone: v['phone']!);
+          if (bad != null) return bad;
+          try {
+            await sync.save(id: r?.id, name: v['name']!, rel: v['rel']!, phone: v['phone']!);
+          } on AuthFailure catch (f) {
+            return f.message;
+          }
+          if (ctx.mounted) Navigator.pop(ctx);
+          return null;
         },
         onDelete: r == null
             ? null
             : () async {
-                if (await confirmDelete(ctx, r.name)) {
-                  s.deleteRelative(r.id);
-                  if (ctx.mounted) Navigator.pop(ctx);
+                if (!await confirmDelete(ctx, r.name)) return null;
+                try {
+                  await sync.delete(r.id);
+                } on AuthFailure catch (f) {
+                  return f.message;
                 }
+                if (ctx.mounted) Navigator.pop(ctx);
+                return null;
               },
       ),
     );
@@ -94,8 +107,11 @@ class ContactsScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 Row(children: [
                   Expanded(child: FilledButton(onPressed: () => callNumber(context, r.phone), child: const Text('โทรหาญาติ'))),
-                  const SizedBox(width: 8),
-                  Expanded(child: OutlinedButton(onPressed: () => _openRelative(context, r), child: const Text('แก้ไข'))),
+                  // a relative an Admin added is not the patient's to change
+                  if (r.editable) ...[
+                    const SizedBox(width: 8),
+                    Expanded(child: OutlinedButton(onPressed: () => _openRelative(context, r), child: const Text('แก้ไข'))),
+                  ],
                 ]),
               ]),
             ),

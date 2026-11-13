@@ -25,6 +25,16 @@ List<String> parseConditions(String custom) {
   ];
 }
 
+/// Same limits as `save_my_relative` on the server (name 1-100, relationship up to 50, phone 1-20 characters).
+/// Returns the first error message, or null when the relative may be sent.
+String? validateRelative({required String name, required String rel, required String phone}) {
+  if (name.trim().isEmpty || phone.trim().isEmpty) return 'กรุณากรอกชื่อและเบอร์โทร';
+  if (name.trim().length > 100) return 'ชื่อต้องไม่เกิน 100 ตัวอักษร';
+  if (rel.trim().length > 50) return 'ความสัมพันธ์ต้องไม่เกิน 50 ตัวอักษร';
+  if (phone.trim().length > 20) return 'เบอร์โทรต้องไม่เกิน 20 ตัว';
+  return null;
+}
+
 /// First error message in field order, or null when the profile may be saved.
 String? validateProfile({
   required String nickname,
