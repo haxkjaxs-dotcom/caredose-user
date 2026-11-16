@@ -74,6 +74,43 @@ class RemotePlan {
       );
 }
 
+/// An `appointments` row as the app shows it. The server status set is pending|scheduled|done|postponed|cancelled.
+class RemoteAppt {
+  final String id, place, dept, note, status;
+  final DateTime at;
+  const RemoteAppt({required this.id, required this.at, this.place = '', this.dept = '', this.note = '', this.status = 'pending'});
+
+  factory RemoteAppt.fromJson(Json j) {
+    final reason = _s(j['reason']).trim(), note = _s(j['note']).trim();
+    return RemoteAppt(
+      id: _s(j['id']),
+      at: DateTime.parse(_s(j['appointment_at'])),
+      place: _s(j['place']),
+      dept: _s(j['department']),
+      note: [reason, note].where((x) => x.isNotEmpty).join(' · '),
+      status: _s(j['status']),
+    );
+  }
+
+  /// Server status -> the app's appointment styles (see contacts_screen).
+  static const _statusMap = {
+    'pending': 'pending',
+    'scheduled': 'confirmed',
+    'done': 'done',
+    'postponed': 'rescheduled',
+    'cancelled': 'cancelled',
+  };
+
+  Appt toAppt() => Appt(
+        id: id,
+        at: at.toLocal().toIso8601String(),
+        place: place,
+        dept: dept,
+        note: note,
+        status: _statusMap[status] ?? 'pending',
+      );
+}
+
 /// A `medication_logs` row.
 class RemoteLog {
   final String planId, scheduleId, status;

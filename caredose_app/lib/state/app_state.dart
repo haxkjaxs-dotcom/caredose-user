@@ -186,7 +186,8 @@ class AppState extends ChangeNotifier {
 
   /// Replaces the medicines with the server's plans and merges its taken/skipped logs.
   /// Does nothing (no save, no reschedule, no notify) when nothing actually changed.
-  void applyRemote({required List<RemotePlan> plans, required List<RemoteLog> logs}) {
+  /// [appts] / [doctorName] null = not fetched, keep what is there; the server's list replaces the local one otherwise.
+  void applyRemote({required List<RemotePlan> plans, required List<RemoteLog> logs, List<RemoteAppt>? appts, String? doctorName}) {
     final scheduleIds = {
       for (final p in plans) for (final s in p.schedules) '${p.id}|${s.time}': s.id,
     };
@@ -200,8 +201,20 @@ class AppState extends ChangeNotifier {
       final hh = t.hour.toString().padLeft(2, '0'), mm = t.minute.toString().padLeft(2, '0');
       merged['${l.planId}|${dateKey(t)}|$hh:$mm'] = DoseLog(l.status, (l.takenAt ?? l.scheduledAt).toLocal().toIso8601String());
     }
-    final next = data.copyWith(meds: [for (final p in plans) p.toMed()], scheduleIds: scheduleIds, logs: merged);
-    String sig(AppData d) => jsonEncode([d.meds.map((m) => m.toJson()).toList(), d.scheduleIds, d.logs.map((k, v) => MapEntry(k, v.toJson()))]);
+    final next = data.copyWith(
+      meds: [for (final p in plans) p.toMed()],
+      scheduleIds: scheduleIds,
+      logs: merged,
+      appts: appts == null ? null : [for (final a in appts) a.toAppt()],
+      doctors: doctorName == null ? null : (doctorName.isEmpty ? const <Doctor>[] : [Doctor(id: 'server', name: doctorName)]),
+    );
+    String sig(AppData d) => jsonEncode([
+          d.meds.map((m) => m.toJson()).toList(),
+          d.scheduleIds,
+          d.logs.map((k, v) => MapEntry(k, v.toJson())),
+          d.appts.map((a) => a.toJson()).toList(),
+          d.doctors.map((x) => x.toJson()).toList(),
+        ]);
     if (sig(next) == sig(data)) return;
     _commit(next);
   }

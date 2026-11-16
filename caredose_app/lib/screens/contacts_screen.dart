@@ -22,6 +22,7 @@ const _apptStyles = {
   'pending': _ApptStyle('รอนัด', Color(0xFFFEF3C7), Color(0xFF78350F), Color(0xFFB45309)),
   'confirmed': _ApptStyle('ยืนยันแล้ว', Color(0xFFDCFCE7), Color(0xFF14532D), Color(0xFF15803D)),
   'rescheduled': _ApptStyle('เลื่อนนัด', Color(0xFFFFEDD5), Color(0xFF7C2D12), Color(0xFFC2410C)),
+  'done': _ApptStyle('มาตามนัดแล้ว', Color(0xFFF5F5F4), Color(0xFF44403C), Color(0xFF78716C)),
   'cancelled': _ApptStyle('ยกเลิก', Color(0xFFFEE2E2), Color(0xFF7F1D1D), Color(0xFFB91C1C)),
 };
 

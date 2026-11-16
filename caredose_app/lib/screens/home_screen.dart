@@ -136,10 +136,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Row(children: [
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(x.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text(x.spec, style: const TextStyle(fontSize: 14)),
+                    if (x.spec.isNotEmpty) Text(x.spec, style: const TextStyle(fontSize: 14)),
                   ])),
-                  const SizedBox(width: 12),
-                  FilledButton(onPressed: () => callNumber(context, x.phone), child: const Text('โทร')),
+                  if (x.phone.isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    FilledButton(onPressed: () => callNumber(context, x.phone), child: const Text('โทร')),
+                  ],
                 ]),
               ),
             if (s.data.doctors.isEmpty) const Text('ยังไม่มีรายชื่อแพทย์'),

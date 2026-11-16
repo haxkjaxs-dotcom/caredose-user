@@ -34,6 +34,46 @@ void main() {
     expect(pulled, 1);
   });
 
+  test('pull brings the doctor name and the appointments (server statuses mapped), replacing the local list', () async {
+    final s = await makeState();
+    final repo = FakeMedRepository()
+      ..plans = [plan]
+      ..doctorName = 'นพ.สมชาย'
+      ..appts = [
+        RemoteAppt(id: 'a1', at: DateTime.utc(2026, 12, 1, 3), place: 'รพ.', dept: 'อายุรกรรม', note: 'ตรวจเลือด', status: 'scheduled'),
+        RemoteAppt(id: 'a2', at: DateTime.utc(2026, 12, 9, 3), status: 'postponed'),
+      ];
+    await MedSync(repo, s).pull();
+    await s.flush();
+    expect(s.data.doctors.map((d) => d.name), ['นพ.สมชาย']);
+    expect(s.data.appts.map((a) => (a.id, a.status)), [('a1', 'confirmed'), ('a2', 'rescheduled')]);
+    expect(s.data.appts.first.place, 'รพ.');
+    expect(s.data.appts.first.note, 'ตรวจเลือด');
+    // removed on the server: gone from the app
+    repo
+      ..doctorName = ''
+      ..appts = [];
+    await MedSync(repo, s).pull();
+    await s.flush();
+    expect(s.data.doctors, isEmpty);
+    expect(s.data.appts, isEmpty);
+  });
+
+  test('a failing appointments/doctor fetch still applies the plans and keeps the old extras', () async {
+    final s = await makeState();
+    final ok = FakeMedRepository()
+      ..plans = [plan]
+      ..doctorName = 'นพ.สมชาย';
+    await MedSync(ok, s).pull();
+    final bad = FakeMedRepository()
+      ..plans = [plan]
+      ..extrasFailure = const AuthFailure(AuthFailureKind.network);
+    await MedSync(bad, s).pull();
+    await s.flush();
+    expect(s.data.meds.map((m) => m.id), ['p1']);
+    expect(s.data.doctors.map((d) => d.name), ['นพ.สมชาย']);
+  });
+
   test('network failure leaves data untouched and does not throw', () async {
     final s = await makeState();
     final before = s.data.meds.map((m) => m.id).toList();

@@ -42,6 +42,24 @@ class FakeMedRepository implements MedRepository {
     return logs;
   }
 
+  List<RemoteAppt> appts = [];
+  String doctorName = '';
+
+  /// Thrown by fetchAppointments / fetchDoctorName when set.
+  Object? extrasFailure;
+
+  @override
+  Future<List<RemoteAppt>> fetchAppointments() async {
+    if (extrasFailure != null) throw extrasFailure!;
+    return appts;
+  }
+
+  @override
+  Future<String> fetchDoctorName() async {
+    if (extrasFailure != null) throw extrasFailure!;
+    return doctorName;
+  }
+
   @override
   Future<void> upsertLog(LogOp op) async {
     upsertCalls++;
