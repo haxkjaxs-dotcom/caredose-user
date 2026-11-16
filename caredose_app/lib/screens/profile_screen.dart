@@ -8,6 +8,8 @@ import '../services/auth_repository.dart';
 import '../state/auth_state.dart';
 import '../widgets/common.dart';
 
+const _titles = ['นาย', 'นาง', 'นางสาว', 'เด็กชาย', 'เด็กหญิง'];
+
 /// Onboarding form shown once after the first login.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -23,6 +25,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final other = TextEditingController();
   final selected = <String>{};
   bool none = false, consent = false, busy = false;
+  String? title;
   String err = '';
 
   @override
@@ -69,6 +72,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => err = e);
       return;
     }
+    if (title == null) {
+      setState(() => err = 'กรุณาเลือกคำนำหน้า');
+      return;
+    }
+    final name = fullName.text.trim();
     final auth = context.read<AuthState>();
     setState(() {
       busy = true;
@@ -77,7 +85,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await auth.saveProfile(Profile(
         nickname: nickname.text.trim(),
-        fullName: fullName.text.trim(),
+        // Same as the Admin web: the title lives inside full_name. Not added twice if typed in the name too.
+        fullName: name.startsWith(title!) ? name : '$title $name',
         age: int.parse(age.text.trim()),
         conditions: _conditions,
         consentAt: DateTime.now(),
@@ -97,6 +106,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const SectionTitle('ข้อมูลส่วนตัว'),
           LabeledField('ชื่อเล่น', child: TextField(key: const ValueKey('nickname'), controller: nickname, textInputAction: TextInputAction.next)),
+          const SizedBox(height: 16),
+          LabeledField(
+            'คำนำหน้า',
+            child: DropdownButtonFormField<String>(
+              key: const ValueKey('title'),
+              initialValue: title,
+              isExpanded: true,
+              hint: const Text('เลือกคำนำหน้า'),
+              items: [for (final t in _titles) DropdownMenuItem(value: t, child: Text(t))],
+              onChanged: (v) => setState(() => title = v),
+            ),
+          ),
           const SizedBox(height: 16),
           LabeledField('ชื่อ-นามสกุลจริง', child: TextField(key: const ValueKey('full-name'), controller: fullName, textInputAction: TextInputAction.next)),
           const SizedBox(height: 16),

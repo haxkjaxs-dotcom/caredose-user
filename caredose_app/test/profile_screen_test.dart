@@ -33,7 +33,14 @@ Future<void> tapVisible(WidgetTester tester, Finder f) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> fill(WidgetTester tester, {String nick = 'สมศรี', String name = 'สมศรี ใจดี', String age = '65'}) async {
+Future<void> pickTitle(WidgetTester tester, String t) async {
+  await tapVisible(tester, find.byKey(const ValueKey('title')));
+  await tester.tap(find.text(t).last);
+  await tester.pumpAndSettle();
+}
+
+Future<void> fill(WidgetTester tester, {String nick = 'สมศรี', String name = 'สมศรี ใจดี', String age = '65', String? title = 'นาง'}) async {
+  if (title != null) await pickTitle(tester, title);
   await tester.enterText(find.byKey(const ValueKey('nickname')), nick);
   await tester.enterText(find.byKey(const ValueKey('full-name')), name);
   await tester.enterText(find.byKey(const ValueKey('age')), age);
@@ -63,9 +70,27 @@ void main() {
     await tapVisible(tester, saveButton());
     expect(repo.saveCalls, 1);
     expect(repo.lastSaved?.nickname, 'สมศรี');
-    expect(repo.lastSaved?.fullName, 'สมศรี ใจดี');
+    expect(repo.lastSaved?.fullName, 'นาง สมศรี ใจดี');
     expect(repo.lastSaved?.age, 65);
     expect(repo.lastSaved?.conditions, ['เบาหวาน', 'ภูมิแพ้']);
+    await unmount(tester);
+  });
+
+  testWidgets('a title is required and is not added twice', (tester) async {
+    final repo = await pumpProfile(tester);
+    await fill(tester, title: null);
+    await tapVisible(tester, chip('เบาหวาน'));
+    await tapVisible(tester, consent());
+    await tapVisible(tester, saveButton());
+    expect(find.text('กรุณาเลือกคำนำหน้า'), findsOneWidget);
+    expect(repo.saveCalls, 0);
+
+    tester.view.physicalSize = const Size(360, 1800); // tall enough that the save button stays on screen below the error box
+    await tester.pumpAndSettle();
+    await pickTitle(tester, 'นาย');
+    await tester.enterText(find.byKey(const ValueKey('full-name')), 'นาย ธนพล ใจดี');
+    await tapVisible(tester, saveButton());
+    expect(repo.lastSaved?.fullName, 'นาย ธนพล ใจดี');
     await unmount(tester);
   });
 

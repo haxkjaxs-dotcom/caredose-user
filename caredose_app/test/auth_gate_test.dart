@@ -101,6 +101,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('ยินยอมให้เก็บข้อมูลสุขภาพของฉันไว้ในระบบ'), findsOneWidget);
 
+    await tapVisible(tester, find.byKey(const ValueKey('title')));
+    await tester.tap(find.text('นาง').last);
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('nickname')), 'สมศรี');
     await tester.enterText(find.byKey(const ValueKey('full-name')), 'สมศรี ใจดี');
     await tester.enterText(find.byKey(const ValueKey('age')), '65');
