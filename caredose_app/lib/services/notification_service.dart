@@ -13,7 +13,12 @@ import 'notice_repository.dart';
 import 'notification_plan.dart';
 import 'storage.dart';
 
-const _channelId = 'dose_reminders';
+// Android keeps a channel's sound once created and a sound belongs to a channel, so each round has its own channel
+// (res/raw/<sound>.mp3). Changing a sound later needs a new channel id; the pre-sound channel is deleted in init().
+const _oldChannelId = 'dose_reminders';
+const _earlyChannelId = 'dose_early_v1';
+const _mainChannelId = 'dose_main_v1';
+const _repeatChannelId = 'dose_repeat_v1';
 const _adminChannelId = 'admin_messages';
 const _iosCategory = 'dose';
 
@@ -73,6 +78,11 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
       },
       onDidReceiveBackgroundNotificationResponse: notificationBackgroundHandler,
     );
+    try {
+      await _android?.deleteNotificationChannel(channelId: _oldChannelId);
+    } catch (e) {
+      debugPrint('old channel cleanup failed: $e');
+    }
     _ready = true;
   }
 
@@ -100,14 +110,16 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
     return opts?.isEnabled ?? false;
   }
 
-  NotificationDetails _details() => NotificationDetails(
+  /// Due now (main) or overdue (repeat): with the three buttons.
+  NotificationDetails _details({required bool repeat}) => NotificationDetails(
         android: AndroidNotificationDetails(
-          _channelId,
-          'แจ้งเตือนทานยา',
-          channelDescription: 'แจ้งเตือนเมื่อถึงเวลาทานยา',
+          repeat ? _repeatChannelId : _mainChannelId,
+          repeat ? 'แจ้งเตือนเลยเวลาทานยา' : 'แจ้งเตือนถึงเวลาทานยา',
+          channelDescription: repeat ? 'เตือนซ้ำเมื่อเลยเวลาทานยา' : 'แจ้งเตือนเมื่อถึงเวลาทานยา',
           importance: Importance.max,
           priority: Priority.high,
           category: AndroidNotificationCategory.reminder,
+          sound: RawResourceAndroidNotificationSound(repeat ? 'dose_repeat' : 'dose_main'),
           actions: [
             for (final (id, label) in doseActions())
               AndroidNotificationAction(id, label, showsUserInterface: false, cancelNotification: true),
@@ -119,12 +131,13 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
   /// The heads-up before a dose: no buttons, the dose is not due yet.
   NotificationDetails _earlyDetails() => const NotificationDetails(
         android: AndroidNotificationDetails(
-          _channelId,
-          'แจ้งเตือนทานยา',
-          channelDescription: 'แจ้งเตือนเมื่อถึงเวลาทานยา',
+          _earlyChannelId,
+          'แจ้งเตือนใกล้ถึงเวลาทานยา',
+          channelDescription: 'แจ้งเตือนล่วงหน้าก่อนถึงเวลาทานยา',
           importance: Importance.max,
           priority: Priority.high,
           category: AndroidNotificationCategory.reminder,
+          sound: RawResourceAndroidNotificationSound('dose_early'),
         ),
         iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
       );
@@ -175,7 +188,8 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
     if (plan.isEmpty) return;
     final exact = await _android?.canScheduleExactNotifications() ?? true;
     final mode = exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexactAllowWhileIdle;
-    final details = _details();
+    final mainDetails = _details(repeat: false);
+    final repeatDetails = _details(repeat: true);
     final earlyDetails = _earlyDetails();
     for (final p in plan) {
       try {
@@ -184,7 +198,7 @@ class NotificationService implements NotificationScheduler, NotificationPermissi
           title: p.title,
           body: p.body,
           scheduledDate: tz.TZDateTime.from(p.at, tz.local),
-          notificationDetails: p.isEarly ? earlyDetails : details,
+          notificationDetails: p.isEarly ? earlyDetails : (p.isRepeat ? repeatDetails : mainDetails),
           androidScheduleMode: mode,
           payload: p.payload,
         );
