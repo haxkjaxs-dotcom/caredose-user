@@ -1,3 +1,11 @@
+/// What an admin already typed for this patient on the web, used to pre-fill the first-login form. Every field may be empty.
+class ProfileDraft {
+  const ProfileDraft({this.fullName = '', this.age, this.conditions = const []});
+  final String fullName;
+  final int? age;
+  final List<String> conditions;
+}
+
 /// User profile stored in Supabase `profiles` and cached locally (same JSON).
 class Profile {
   final String nickname, fullName;

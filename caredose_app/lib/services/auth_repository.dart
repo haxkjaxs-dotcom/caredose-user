@@ -41,6 +41,9 @@ abstract class AuthRepository {
   /// Returns the patient id, or null when no such patient exists (yet).
   Future<String?> claimPatient();
   Future<Profile?> loadProfile();
+
+  /// The patient's name, age and conditions as the admin entered them (for pre-filling the profile form), or null.
+  Future<ProfileDraft?> loadDraft();
   Future<void> saveProfile(Profile p);
   Future<void> signOut();
 }

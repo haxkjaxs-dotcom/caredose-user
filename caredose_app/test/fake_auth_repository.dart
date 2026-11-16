@@ -87,6 +87,17 @@ class FakeAuthRepository implements AuthRepository {
     return stored;
   }
 
+  /// What [loadDraft] returns (the admin's web entry); [draftFailure] makes it throw.
+  ProfileDraft? draft;
+  AuthFailure? draftFailure;
+
+  @override
+  Future<ProfileDraft?> loadDraft() async {
+    final f = draftFailure;
+    if (f != null) throw f;
+    return draft;
+  }
+
   @override
   Future<void> saveProfile(Profile p) async {
     saveCalls++;

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../logic/auth_validators.dart';
 import '../models/profile.dart';
 import 'auth_repository.dart';
 
@@ -87,6 +88,20 @@ class SupabaseAuthRepository implements AuthRepository {
             .eq('user_id', uid)
             .maybeSingle();
         return profileFromPatientRow(row);
+      });
+
+  @override
+  Future<ProfileDraft?> loadDraft() => guardCall(() async {
+        final uid = _c.auth.currentUser?.id;
+        if (uid == null) return null;
+        final row = await _c.from('patients').select('full_name, age, conditions').eq('user_id', uid).maybeSingle();
+        if (row == null) return null;
+        final age = row['age'];
+        return ProfileDraft(
+          fullName: (row['full_name'] as String? ?? '').trim(),
+          age: age is int ? age : null,
+          conditions: parseConditions(row['conditions'] as String? ?? ''),
+        );
       });
 
   @override

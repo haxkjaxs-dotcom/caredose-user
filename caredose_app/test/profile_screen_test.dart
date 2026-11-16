@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:caredose/models/profile.dart';
 import 'package:caredose/screens/profile_screen.dart';
 import 'package:caredose/services/auth_repository.dart';
 import 'package:caredose/state/auth_state.dart';
@@ -11,18 +12,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fake_auth_repository.dart';
 
-Future<FakeAuthRepository> pumpProfile(WidgetTester tester) async {
+Future<FakeAuthRepository> pumpProfile(WidgetTester tester, {ProfileDraft? draft, AuthFailure? draftFailure}) async {
   tester.view.physicalSize = const Size(360, 800);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   SharedPreferences.setMockInitialValues({});
-  final repo = FakeAuthRepository(signedIn: true);
+  final repo = FakeAuthRepository(signedIn: true)
+    ..draft = draft
+    ..draftFailure = draftFailure;
   final auth = AuthState(repo, await SharedPreferences.getInstance());
   await auth.init();
   await tester.pumpWidget(ChangeNotifierProvider.value(
     value: auth,
     child: MaterialApp(theme: buildTheme(), home: const Scaffold(body: SingleChildScrollView(child: ProfileScreen()))),
   ));
+  await tester.pumpAndSettle(); // the pre-fill arrives asynchronously
   return repo;
 }
 
@@ -185,6 +189,44 @@ void main() {
     expect(repo.saveCalls, 1);
     gate.complete();
     await tester.pumpAndSettle();
+    await unmount(tester);
+  });
+
+  testWidgets('the form is pre-filled from what the admin typed, except the nickname', (tester) async {
+    final repo = await pumpProfile(tester,
+        draft: const ProfileDraft(fullName: 'นางสาว สมหญิง ใจดี', age: 41, conditions: ['เบาหวาน', 'ภูมิแพ้']));
+    String text(String key) => tester.widget<TextField>(find.byKey(ValueKey(key))).controller!.text;
+    expect(text('nickname'), isEmpty);
+    expect(text('full-name'), 'สมหญิง ใจดี');
+    expect(text('age'), '41');
+    expect(text('other-conditions'), 'ภูมิแพ้');
+    expect(tester.widget<FilterChip>(chip('เบาหวาน')).selected, true);
+    expect(find.text('นางสาว'), findsOneWidget); // shown in the title field
+
+    tester.view.physicalSize = const Size(360, 1800); // tall enough that every control stays on screen
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('nickname')), 'หญิง');
+    await tapVisible(tester, consent());
+    await tapVisible(tester, saveButton());
+    expect(repo.lastSaved?.fullName, 'นางสาว สมหญิง ใจดี');
+    expect(repo.lastSaved?.age, 41);
+    expect(repo.lastSaved?.conditions, ['เบาหวาน', 'ภูมิแพ้']);
+    await unmount(tester);
+  });
+
+  testWidgets('a name without a known title is filled whole and the title stays to be picked; "no conditions" is kept', (tester) async {
+    await pumpProfile(tester, draft: const ProfileDraft(fullName: 'สมชาย ใจดี', conditions: ['ไม่มีโรคประจำตัว']));
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('full-name'))).controller!.text, 'สมชาย ใจดี');
+    expect(find.text('เลือกคำนำหน้า'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('age'))).controller!.text, isEmpty);
+    expect(tester.widget<FilterChip>(chip('ไม่มีโรคประจำตัว')).selected, true);
+    await unmount(tester);
+  });
+
+  testWidgets('a failed pre-fill leaves an empty, usable form', (tester) async {
+    await pumpProfile(tester, draftFailure: const AuthFailure(AuthFailureKind.network));
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('full-name'))).controller!.text, isEmpty);
+    expect(tester.takeException(), isNull);
     await unmount(tester);
   });
 }

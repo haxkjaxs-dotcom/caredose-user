@@ -147,6 +147,16 @@ class AuthState extends ChangeNotifier {
     await _resolve();
   }
 
+  /// Best effort: a failure just leaves the form empty.
+  Future<ProfileDraft?> loadDraft() async {
+    try {
+      return await _repo.loadDraft();
+    } catch (e) {
+      debugPrint('profile draft failed: $e');
+      return null;
+    }
+  }
+
   Future<void> saveProfile(Profile p) async {
     await _repo.saveProfile(p);
     await _writeCache(p);

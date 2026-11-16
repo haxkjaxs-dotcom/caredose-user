@@ -29,6 +29,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String err = '';
 
   @override
+  void initState() {
+    super.initState();
+    context.read<AuthState>().loadDraft().then((d) {
+      if (d != null && mounted) _applyDraft(d);
+    });
+  }
+
+  /// Pre-fills what the admin typed on the web (not the nickname). Anything the patient already typed or picked wins.
+  void _applyDraft(ProfileDraft d) {
+    setState(() {
+      if (title == null && fullName.text.isEmpty) {
+        final name = d.fullName;
+        final t = _titles.where((t) => name.startsWith('$t ')).firstOrNull;
+        title = t;
+        fullName.text = t == null ? name : name.substring(t.length + 1).trim();
+      }
+      final a = d.age;
+      if (age.text.isEmpty && a != null && a >= 1 && a <= 120) age.text = '$a';
+      if (selected.isEmpty && !none && other.text.isEmpty && d.conditions.isNotEmpty) {
+        if (d.conditions.contains(noConditions)) {
+          none = true;
+        } else {
+          selected.addAll(d.conditions.where(commonConditions.contains));
+          other.text = d.conditions.where((c) => !commonConditions.contains(c)).join(', ');
+        }
+      }
+    });
+  }
+
+  @override
   void dispose() {
     for (final c in [nickname, fullName, age, other]) {
       c.dispose();
@@ -109,13 +139,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 16),
           LabeledField(
             'คำนำหน้า',
-            child: DropdownButtonFormField<String>(
+            // The inner key follows the value: initialValue is only read when the field is created, and the pre-fill sets it later.
+            child: KeyedSubtree(
               key: const ValueKey('title'),
-              initialValue: title,
-              isExpanded: true,
-              hint: const Text('เลือกคำนำหน้า'),
-              items: [for (final t in _titles) DropdownMenuItem(value: t, child: Text(t))],
-              onChanged: (v) => setState(() => title = v),
+              child: DropdownButtonFormField<String>(
+                key: ValueKey('title-$title'),
+                initialValue: title,
+                isExpanded: true,
+                hint: const Text('เลือกคำนำหน้า'),
+                items: [for (final t in _titles) DropdownMenuItem(value: t, child: Text(t))],
+                onChanged: (v) => setState(() => title = v),
+              ),
             ),
           ),
           const SizedBox(height: 16),
